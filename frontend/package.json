@@ -2,6 +2,7 @@
   "name": "enterprise-ai-knowledge-assistant-frontend",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.17.1",
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 3000",
     "build": "next build",
@@ -23,4 +24,3 @@
     "typescript": "5.7.2"
   }
 }
-

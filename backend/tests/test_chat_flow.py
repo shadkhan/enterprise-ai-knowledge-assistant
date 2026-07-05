@@ -1,8 +1,10 @@
 from fastapi.testclient import TestClient
 
+from app.db import init_db
 from app.main import app
 
 
+init_db()
 client = TestClient(app)
 
 
@@ -30,4 +32,3 @@ def test_chat_flow_with_ingested_document() -> None:
     body = chat_response.json()
     assert body["citations"]
     assert body["estimated_cost_usd"] >= 0
-

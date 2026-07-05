@@ -9,6 +9,8 @@ from app.evaluation.service import evaluator
 from app.ingestion.service import ingestion_service
 from app.llm.factory import get_llm_provider
 from app.observability.logging import get_logger
+from app.repositories.costs import cost_repository
+from app.repositories.evaluations import evaluation_repository
 from app.retrieval.service import retrieval_service
 from app.routing.model_router import model_router
 from app.schemas.chat import ChatRequest, ChatResponse, Citation
@@ -90,6 +92,7 @@ def chat(payload: ChatRequest, user: User = Depends(current_user)) -> ChatRespon
         completion_tokens=llm_result.usage.completion_tokens,
         latency_ms=latency_ms,
     )
+    cost_repository.save(usage)
 
     citations = [
         Citation(
@@ -130,12 +133,13 @@ def chat(payload: ChatRequest, user: User = Depends(current_user)) -> ChatRespon
 def cost_metrics(user: User = Depends(current_user)) -> dict:
     if "admin" not in user.roles:
         raise HTTPException(status_code=403, detail="Cost metrics require admin role")
-    return cost_tracker.summary()
+    return cost_repository.summary()
 
 
 @router.post("/evaluate", response_model=EvaluationResponse)
 def evaluate(payload: EvaluationRequest, user: User = Depends(current_user)) -> EvaluationResponse:
     result = evaluator.evaluate(payload)
+    evaluation_repository.save(user.user_id, payload, result)
     logger.info(
         "answer_evaluated",
         extra={
@@ -145,4 +149,3 @@ def evaluate(payload: EvaluationRequest, user: User = Depends(current_user)) -> 
         },
     )
     return result
-

@@ -2,16 +2,8 @@ from uuid import uuid4
 
 from app.ingestion.chunking import chunk_text
 from app.ingestion.metadata import extract_metadata
+from app.repositories.documents import document_repository
 from app.schemas.documents import DocumentChunk, DocumentCreate, DocumentSummary
-
-
-class InMemoryKnowledgeStore:
-    def __init__(self) -> None:
-        self.documents: dict[str, DocumentSummary] = {}
-        self.chunks: dict[str, list[DocumentChunk]] = {}
-
-
-store = InMemoryKnowledgeStore()
 
 
 class IngestionService:
@@ -29,20 +21,17 @@ class IngestionService:
             metadata=metadata,
         )
         chunks = chunk_text(document_id, payload.text)
-        store.documents[document_id] = summary
-        store.chunks[document_id] = chunks
+        document_repository.save_document(summary, chunks)
         return [summary]
 
     def list_documents(self) -> list[DocumentSummary]:
-        return list(store.documents.values())
+        return document_repository.list_documents()
 
     def list_chunks(self) -> list[tuple[DocumentSummary, DocumentChunk]]:
-        pairs: list[tuple[DocumentSummary, DocumentChunk]] = []
-        for document_id, chunks in store.chunks.items():
-            document = store.documents[document_id]
-            pairs.extend((document, chunk) for chunk in chunks)
-        return pairs
+        return document_repository.list_chunks()
+
+    def has_documents(self) -> bool:
+        return document_repository.count_documents() > 0
 
 
 ingestion_service = IngestionService()
-

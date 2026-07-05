@@ -6,7 +6,7 @@ Reference implementation skeleton for a secure enterprise RAG assistant. It demo
 
 - FastAPI backend with `/chat`, `/ingest`, `/documents`, `/health`, `/metrics/cost`, and `/evaluate`
 - Mock RBAC for users, departments, roles, and document classifications
-- Mock ingestion, chunking, keyword retrieval, LLM provider, routing, guardrails, evaluation, and cost tracking
+- Persistent document/chunk storage, keyword retrieval, mock LLM provider, routing, guardrails, evaluation, and cost tracking
 - Next.js + Tailwind UI with chat, citations, source panel, and admin metrics placeholder
 - Docker Compose with backend, frontend, PostgreSQL + pgvector, and Redis
 - Interview-friendly docs in `docs/`
@@ -15,13 +15,25 @@ Reference implementation skeleton for a secure enterprise RAG assistant. It demo
 
 ```bash
 cd backend
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+uv --system-certs sync
+uv run uvicorn app.main:app --reload
 ```
 
 Open `http://localhost:8000/docs`.
+
+On Windows, you can run the backend from the repo root:
+
+```powershell
+.\run.ps1 -Mode backend
+```
+
+Backend-only mode uses local SQLite by default, so documents, cost records, and evaluation records survive restarts in `backend/knowledge.db`.
+
+Install `uv` first if needed:
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
 
 Seed a document:
 
@@ -48,10 +60,33 @@ cd infra
 docker compose up --build
 ```
 
+Or from the repo root on Windows:
+
+```powershell
+.\run.ps1
+```
+
 - Frontend: `http://localhost:3000`
 - Backend API docs: `http://localhost:8000/docs`
 - Postgres: `localhost:5432`
 - Redis: `localhost:6379`
+
+A demo `Remote Work Policy` document is seeded automatically when the database is empty, so the chat UI can answer a question immediately after startup.
+
+## Frontend only
+
+```bash
+cd frontend
+corepack enable
+pnpm install
+pnpm dev
+```
+
+Or from the repo root on Windows:
+
+```powershell
+.\run.ps1 -Mode frontend
+```
 
 ## Mock users
 
@@ -63,10 +98,9 @@ Pass the selected user with the `X-User-Id` header.
 
 ## Production extension points
 
-- Replace in-memory stores with PostgreSQL repositories and pgvector search
+- Extend the repository layer with migrations, embeddings, and pgvector search
 - Add object storage for raw files and parser workers for PDFs, Office, Confluence, SharePoint, and Jira
 - Add Celery for asynchronous ingestion and embedding jobs
 - Replace mock LLM provider with OpenAI, Anthropic, or approved local models
 - Persist cost/evaluation telemetry and export traces to OpenTelemetry-compatible tooling
 - Integrate enterprise SSO, ABAC policies, DLP, audit logs, and secrets management
-

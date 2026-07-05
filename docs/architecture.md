@@ -4,7 +4,7 @@
 
 The Enterprise AI Knowledge Assistant lets employees ask natural-language questions over internal knowledge while preserving access controls, citations, observability, cost control, and future extensibility.
 
-This repository is a reference skeleton. It uses mock providers and in-memory stores so the architecture is easy to inspect and run. The `infra/` folder shows the intended production dependencies: PostgreSQL with pgvector, Redis, and containerized services.
+This repository is a reference skeleton. It uses mock providers so the architecture is easy to inspect and run, while documents, chunks, costs, and evaluations are now stored through a SQLAlchemy repository layer. Backend-only development uses SQLite by default; the `infra/` folder shows the PostgreSQL with pgvector, Redis, and containerized full-stack path.
 
 ## High-level flow
 
@@ -43,7 +43,7 @@ Production systems should integrate SSO, SCIM, group sync, document-level ACLs, 
 
 ### Ingestion
 
-The ingestion module accepts raw text, extracts metadata, chunks content, and stores document summaries/chunks in memory.
+The ingestion module accepts raw text, extracts metadata, chunks content, and stores document summaries/chunks through the repository layer.
 
 Production ingestion would add:
 
@@ -55,7 +55,7 @@ Production ingestion would add:
 
 ### Retrieval
 
-The current retrieval service uses keyword overlap as a placeholder. The intended design is hybrid retrieval:
+The current retrieval service reads persisted chunks and uses keyword overlap as a placeholder. The intended design is hybrid retrieval:
 
 - metadata filter by tenant, department, ACL, classification, freshness, and source
 - lexical search for exact policy names, IDs, ticket keys, and acronyms
@@ -122,4 +122,3 @@ The current orchestration is intentionally linear. To evolve into multi-agent wo
 - action agent for ticket creation or workflow updates
 
 Keep shared services such as auth, retrieval, cost tracking, and logging outside agents so governance remains centralized.
-

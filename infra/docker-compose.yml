@@ -16,13 +16,14 @@ services:
   frontend:
     image: node:22-alpine
     working_dir: /app
-    command: sh -c "npm install && npm run dev"
+    command: sh -c "corepack enable && pnpm install && pnpm dev"
     environment:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
     ports:
       - "3000:3000"
     volumes:
       - ../frontend:/app
+      - frontend_pnpm_store:/root/.local/share/pnpm/store
     depends_on:
       - backend
 
@@ -48,4 +49,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
-
+  frontend_pnpm_store:

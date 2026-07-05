@@ -3,22 +3,35 @@
 ## MVP
 
 - Mock RBAC and basic document ingestion
-- Text chunking and in-memory retrieval
+- Text chunking and persistent document/chunk storage
 - Mock LLM provider with citations
 - Model routing placeholder
-- Cost, latency, and token tracking
+- Persistent cost, latency, and token tracking
 - Structured JSON logs
 - Basic chat UI and admin metrics placeholder
 
 ## V1
 
-- PostgreSQL persistence for documents, chunks, costs, evaluations, and audit logs
+- Database migrations and audit log persistence
 - pgvector embeddings and hybrid retrieval
 - Real file upload and parsers for PDF, Office, Markdown, and HTML
 - OpenAI or approved provider integration
 - Celery workers for ingestion and embedding
 - SSO integration and enterprise group sync
 - Feedback capture on answers
+
+## Completed Phase 1 Foundation
+
+- SQLAlchemy repository layer
+- SQLite persistence for backend-only local development
+- PostgreSQL-compatible persistence for full-stack Docker runs
+- Persistent documents and chunks
+- Persistent cost records and admin cost summaries
+- Persistent evaluation records
+- Automatic demo seed document
+- One-command Windows runner in `run.ps1`
+- `uv` backend package management
+- `pnpm` frontend package management
 
 ## V2
 
@@ -38,4 +51,3 @@
 - Human review workflows for low-confidence answers
 - Adaptive model routing using quality, cost, latency, and risk telemetry
 - Multi-agent workflows for complex research and operational actions
-
