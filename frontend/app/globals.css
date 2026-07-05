@@ -3,7 +3,19 @@
 @tailwind utilities;
 
 body {
-  background: #f7f8fa;
-  color: #111827;
+  min-height: 100vh;
+  background: #f1f5f9;
+  color: #0f172a;
+  font-feature-settings: "rlig" 1, "calt" 1;
 }
 
+button,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: #a7f3d0;
+  color: #064e3b;
+}
