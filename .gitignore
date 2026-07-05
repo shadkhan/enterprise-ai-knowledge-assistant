@@ -5,6 +5,10 @@ venv/
 *.pyc
 .env
 node_modules/
+.pnpm-store/
+frontend/.pnpm-store/
+package-lock.json
+frontend/package-lock.json
 .next/
 dist/
 build/
