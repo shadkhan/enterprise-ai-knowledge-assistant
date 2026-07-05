@@ -28,6 +28,7 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   response?: ChatResponse;
+  animate?: boolean;
 };
 
 const USERS: Array<{ id: MockUserId; label: string; detail: string }> = [
@@ -104,6 +105,7 @@ export function ChatShell() {
           role: "assistant",
           content: response.answer,
           response,
+          animate: true,
         },
       ]);
     } catch (err) {
@@ -116,6 +118,7 @@ export function ChatShell() {
           role: "assistant",
           content:
             "I could not reach the assistant API. Check that the backend is running at http://localhost:8000, then try again.",
+          animate: true,
         },
       ]);
     } finally {
@@ -259,7 +262,7 @@ export function ChatShell() {
                 />
                 <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-3 py-2">
                   <div className="truncate text-xs text-slate-500">
-                    {USERS.find((user) => user.id === userId)?.label} • {quality} route
+                    {USERS.find((user) => user.id === userId)?.label} - {quality} route
                   </div>
                   <button
                     type="submit"
@@ -322,6 +325,9 @@ export function ChatShell() {
 
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
+  const shouldAnimate = Boolean(message.animate && !isUser);
+  const { displayedText, complete } = useTypewriter(message.content, shouldAnimate);
+
   return (
     <div className={`flex items-start gap-3 ${isUser ? "justify-end" : ""}`}>
       {!isUser && <Avatar role="assistant" />}
@@ -330,8 +336,11 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           isUser ? "bg-slate-950 text-white" : "border border-slate-200 bg-slate-50 text-slate-900"
         }`}
       >
-        <div className="whitespace-pre-wrap text-sm leading-6">{message.content}</div>
-        {message.response && (
+        <div className="whitespace-pre-wrap text-sm leading-6">
+          {displayedText}
+          {shouldAnimate && !complete ? <TypingDots /> : null}
+        </div>
+        {message.response && complete && (
           <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-200 pt-3 text-xs sm:grid-cols-4">
             <Metric label="Model" value={message.response.model} />
             <Metric label="Latency" value={`${message.response.latency_ms} ms`} />
@@ -342,6 +351,53 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       </div>
       {isUser && <Avatar role="user" />}
     </div>
+  );
+}
+
+function useTypewriter(text: string, active: boolean) {
+  const [displayedText, setDisplayedText] = useState(active ? "" : text);
+  const [complete, setComplete] = useState(!active);
+
+  useEffect(() => {
+    if (!active) {
+      setDisplayedText(text);
+      setComplete(true);
+      return;
+    }
+
+    let index = 0;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    setDisplayedText("");
+    setComplete(false);
+
+    function tick() {
+      index += 1;
+      setDisplayedText(text.slice(0, index));
+
+      if (index >= text.length) {
+        setComplete(true);
+        return;
+      }
+
+      const currentCharacter = text[index - 1];
+      const delay = currentCharacter === "." || currentCharacter === "?" || currentCharacter === "!" ? 130 : currentCharacter === "\n" ? 180 : 18;
+      timeoutId = setTimeout(tick, delay);
+    }
+
+    timeoutId = setTimeout(tick, 180);
+    return () => clearTimeout(timeoutId);
+  }, [active, text]);
+
+  return { displayedText, complete };
+}
+
+function TypingDots() {
+  return (
+    <span className="ml-1 inline-flex translate-y-0.5 items-center gap-0.5" aria-label="Typing">
+      <span className="h-1.5 w-1.5 animate-typing-dot rounded-full bg-slate-400" />
+      <span className="h-1.5 w-1.5 animate-typing-dot rounded-full bg-slate-400 [animation-delay:140ms]" />
+      <span className="h-1.5 w-1.5 animate-typing-dot rounded-full bg-slate-400 [animation-delay:280ms]" />
+    </span>
   );
 }
 
@@ -374,7 +430,7 @@ function DocumentCard({ document }: { document: DocumentSummary }) {
         <div className="min-w-0">
           <div className="truncate text-sm font-medium text-slate-950">{document.title}</div>
           <div className="mt-1 text-xs text-slate-500">
-            {document.department} • {document.classification}
+            {document.department} - {document.classification}
           </div>
           {document.tags.length ? (
             <div className="mt-2 flex flex-wrap gap-1">
@@ -398,3 +454,4 @@ function PanelLabel({ children }: { children: ReactNode }) {
 function PanelEmpty({ label }: { label: string }) {
   return <div className="rounded border border-dashed border-slate-300 bg-white px-3 py-4 text-sm text-slate-500">{label}</div>;
 }
+
