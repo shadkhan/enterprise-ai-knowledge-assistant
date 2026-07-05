@@ -116,8 +116,7 @@ export function ChatShell() {
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content:
-            "I could not reach the assistant API. Check that the backend is running at http://localhost:8000, then try again.",
+          content: `The assistant API request failed: ${message}`,
           animate: true,
         },
       ]);
