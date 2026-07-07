@@ -1,19 +1,27 @@
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from llama_index.core import Document
+
 from app.schemas.documents import DocumentChunk
 
 
-def chunk_text(document_id: str, text: str, chunk_size: int = 700) -> list[DocumentChunk]:
-    words = text.split()
-    chunks: list[DocumentChunk] = []
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1200,
+    chunk_overlap=180,
+    separators=["\n\n", "\n", ". ", " ", ""],
+)
 
-    for index in range(0, len(words), chunk_size):
-        chunk_words = words[index : index + chunk_size]
-        chunks.append(
-            DocumentChunk(
-                chunk_id=f"{document_id}-chunk-{len(chunks) + 1}",
-                document_id=document_id,
-                text=" ".join(chunk_words),
-            )
+
+def chunk_text(document_id: str, text: str) -> list[DocumentChunk]:
+    chunks = splitter.split_text(text)
+    return [
+        DocumentChunk(
+            chunk_id=f"{document_id}-chunk-{index + 1}",
+            document_id=document_id,
+            text=chunk,
         )
+        for index, chunk in enumerate(chunks)
+    ] or [DocumentChunk(chunk_id=f"{document_id}-chunk-1", document_id=document_id, text="")]
 
-    return chunks or [DocumentChunk(chunk_id=f"{document_id}-chunk-1", document_id=document_id, text="")]
 
+def chunk_llama_document(document_id: str, document: Document) -> list[DocumentChunk]:
+    return chunk_text(document_id, document.get_content())

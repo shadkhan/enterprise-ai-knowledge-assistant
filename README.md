@@ -1,51 +1,94 @@
-# Enterprise AI Knowledge Assistant
+# 🧠 Enterprise AI Knowledge Assistant
 
-Reference implementation for a secure enterprise RAG assistant. Employees can ask questions over internal knowledge, receive cited answers, and see model/cost telemetry while the backend enforces mock role, department, and clearance rules.
+> Secure, citation-first enterprise RAG assistant with permission-aware retrieval, cost telemetry, evaluation hooks, and a modern Next.js chat experience.
 
-The project is currently a runnable MVP plus part of the persistent RAG foundation. It is still not production-ready: LLM generation, retrieval quality, identity, security controls, and ingestion connectors are intentionally simplified so the architecture remains easy to inspect and extend.
+![Status](https://img.shields.io/badge/status-MVP%20%2B%20Persistent%20Foundation-2563eb)
+![Backend](https://img.shields.io/badge/backend-FastAPI-009688)
+![Frontend](https://img.shields.io/badge/frontend-Next.js-111827)
+![Python](https://img.shields.io/badge/python-uv-6b46c1)
+![Node](https://img.shields.io/badge/node-pnpm-f59e0b)
 
-## Current Status
+## ✨ Overview
 
-Done:
+Enterprise AI Knowledge Assistant is a reference implementation for a secure enterprise RAG system. Employees can ask natural-language questions over internal knowledge, receive cited answers, and see model, token, latency, and cost telemetry.
 
-- FastAPI backend with `/chat`, `/ingest`, `/documents`, `/health`, `/metrics/cost`, and `/evaluate`
-- Mock RBAC users with role, department, and clearance-based document visibility
-- SQLAlchemy repository layer
-- SQLite persistence for backend-only local development
-- PostgreSQL-compatible persistence for Docker/full-stack runs
-- Persistent documents, chunks, cost records, and evaluation records
-- Keyword retrieval over authorized chunks
-- Mock LLM provider with citations
-- OpenAI provider placeholder
-- Rules-based model routing
-- Prompt-injection and PII placeholder guardrails
-- Structured JSON logs
-- Improved Next.js chat UI with conversation history, user selector, answer quality selector, source panel, visible documents panel, and typewriter response animation
-- Admin metrics page for cost/token summaries
-- Docker Compose with backend, frontend, PostgreSQL + pgvector, and Redis
-- `uv` for Python package management
-- `pnpm` for frontend package management
-- Demo `Remote Work Policy` auto-seed when the database is empty
+The current project is a runnable MVP plus part of the persistent RAG foundation. It is intentionally not production-complete yet: LLM generation, retrieval quality, identity, ingestion connectors, and advanced governance controls are still planned modules.
 
-Not done yet:
+## 🧭 Current Status
 
-- Real embeddings and pgvector retrieval
-- Hybrid lexical + semantic search
-- Real OpenAI/Anthropic/local model implementation
-- Streaming API responses from the backend
-- Real file upload and document parsers
-- Enterprise SSO and document-level ACL sync
-- Production DLP, audit logging, and policy enforcement
-- Full observability traces and quality dashboards
+| Area | Current State |
+| --- | --- |
+| Backend API | FastAPI service with `/chat`, `/ingest`, `/documents`, `/health`, `/metrics/cost`, and `/evaluate` |
+| Identity | Mock users with role, department, and clearance fields |
+| Authorization | Permission-aware document filtering before retrieval context assembly |
+| Storage | SQLAlchemy repositories with SQLite for backend-only local mode and PostgreSQL for Docker mode |
+| Chunking | LangChain `RecursiveCharacterTextSplitter` |
+| Document normalization | LlamaIndex `Document` objects before chunking |
+| Retrieval | Keyword overlap over authorized chunks |
+| LLM | Mock provider plus OpenAI provider placeholder |
+| UI | Next.js chat UI with conversation history, source panel, visible documents, user selector, quality selector, and typewriter animation |
+| Observability | Structured logs plus persisted cost/evaluation records |
+| Package Managers | `uv` for Python, `pnpm` for Node/Next.js |
+| Infra | Docker Compose with backend, frontend, PostgreSQL + pgvector, and Redis |
 
-## Tech Stack
+## ✅ What Works Today
 
-- Backend: FastAPI, Pydantic, SQLAlchemy, uv
-- Frontend: Next.js, React, Tailwind CSS, pnpm
-- Infra: Docker Compose, PostgreSQL, pgvector, Redis
-- Current local persistence: SQLite for backend-only mode, PostgreSQL for Docker mode
+| Capability | Status | Notes |
+| --- | --- | --- |
+| Chat API | ✅ Done | Returns answer, citations, model, provider, latency, tokens, and cost |
+| Document ingestion | ✅ Done | Accepts text documents through `/ingest` |
+| Synthetic ingestion | ✅ Done | Generates synthetic `document`, `pdf`, `data`, `json`, and `text` content through `/synthetic/documents` |
+| Document visibility | ✅ Done | Filters by mock user role, department, and clearance |
+| Persistence | ✅ Done | Documents, chunks, costs, and evaluations persist |
+| Demo seed data | ✅ Done | Seeds a `Remote Work Policy` document when DB is empty |
+| Admin metrics | ✅ Done | Shows request/token/cost summary |
+| Chat UI | ✅ Done | Professional chat workspace with response animation |
+| Local CORS | ✅ Done | Allows local frontend ports such as `3000`, `3001`, etc. |
 
-## Quick Start: Full Stack
+## 🚧 Not Production-Ready Yet
+
+| Area | Limitation | Planned Phase |
+| --- | --- | --- |
+| Retrieval | Uses keyword overlap, not semantic or hybrid retrieval | Phase 3 |
+| Embeddings | pgvector schema exists, but embeddings are not generated yet | Phase 1 / Phase 3 |
+| LLM | Answers come from mock provider | Phase 4 |
+| Streaming | UI animates text locally, but backend does not stream tokens yet | Phase 4 |
+| Ingestion | No real file upload, parsing, OCR, or connector sync yet | Phase 2 |
+| Security | Mock RBAC only; no SSO, ABAC, DLP, or enterprise audit trail yet | Phase 5 |
+| Evaluation | Placeholder evaluator, no golden datasets or groundedness checks yet | Phase 6 |
+
+## 🧱 Architecture At A Glance
+
+```text
+User
+  ↓
+Next.js Chat UI
+  ↓
+FastAPI /chat
+  ↓
+Guardrails → Model Router → Permission-Aware Retrieval → LLM Provider
+  ↓
+Citations + Answer + Cost + Tokens + Latency
+  ↓
+Persistence + Logs + Evaluation Hooks
+```
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+| --- | --- |
+| Backend | FastAPI, Pydantic, SQLAlchemy |
+| LangChain | Framework dependency plus `RecursiveCharacterTextSplitter` for chunking |
+| Document normalization | LlamaIndex core |
+| Python tooling | uv |
+| Frontend | Next.js, React, Tailwind CSS |
+| Node tooling | pnpm |
+| Database | SQLite for backend-only local mode, PostgreSQL for Docker mode |
+| Vector-ready infra | pgvector |
+| Queue/cache-ready infra | Redis |
+| Containers | Docker Compose |
+
+## 🚀 Quick Start: Full Stack
 
 From the repo root:
 
@@ -62,15 +105,17 @@ docker compose up --build
 
 Open:
 
-- Frontend: check Docker output. It is usually `http://localhost:3000`, but Docker may map it to another free port such as `http://localhost:3001`.
-- Backend API docs: `http://localhost:8000/docs`
-- Backend health: `http://localhost:8000/health`
-- Postgres: `localhost:5432`
-- Redis: `localhost:6379`
+| Service | URL |
+| --- | --- |
+| Frontend | Check Docker output. Usually `http://localhost:3000`, sometimes `http://localhost:3001` if `3000` is busy |
+| Backend API docs | `http://localhost:8000/docs` |
+| Backend health | `http://localhost:8000/health` |
+| PostgreSQL | `localhost:5432` |
+| Redis | `localhost:6379` |
 
 The backend allows local frontend origins on any port, so `localhost:3000`, `localhost:3001`, and similar local dev ports can call the API.
 
-## Quick Start: Backend Only
+## ⚙️ Backend Only
 
 ```bash
 cd backend
@@ -84,13 +129,13 @@ Open:
 http://localhost:8000/docs
 ```
 
-On Windows, from the repo root:
+Windows helper:
 
 ```powershell
 .\run.ps1 -Mode backend
 ```
 
-Backend-only mode uses local SQLite by default, so documents, cost records, and evaluation records survive restarts in:
+Backend-only mode uses SQLite:
 
 ```text
 backend/knowledge.db
@@ -102,7 +147,7 @@ Install `uv` if needed:
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-## Quick Start: Frontend Only
+## 🎨 Frontend Only
 
 ```bash
 cd frontend
@@ -110,19 +155,29 @@ pnpm install
 pnpm dev
 ```
 
-Or from the repo root:
+Windows helper:
 
 ```powershell
 .\run.ps1 -Mode frontend
 ```
 
-The frontend expects the backend at:
+The frontend expects:
 
 ```text
 http://localhost:8000
 ```
 
-## API Examples
+## 🔐 Mock Users
+
+| User ID | Role | Department | Clearance |
+| --- | --- | --- | --- |
+| `u-admin` | admin | IT | restricted |
+| `u-hr` | employee, knowledge_manager | HR | internal |
+| `u-employee` | employee | Engineering | internal |
+
+Pass the selected user with the `X-User-Id` header. The frontend also includes a user selector.
+
+## 📡 API Examples
 
 Seed a document:
 
@@ -142,180 +197,209 @@ curl -X POST http://localhost:8000/chat \
   -d "{\"question\":\"How many days can employees work remotely?\",\"preferred_quality\":\"balanced\",\"top_k\":5}"
 ```
 
-## Mock Users
+Generate synthetic content:
 
-- `u-admin`: admin, IT, restricted clearance
-- `u-hr`: employee and knowledge manager, HR, internal clearance
-- `u-employee`: employee, Engineering, internal clearance
+```bash
+curl -X POST http://localhost:8000/synthetic/documents \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: u-admin" \
+  -d "{\"content_type\":\"json\",\"topic\":\"Access Review Controls\",\"department\":\"Global\",\"classification\":\"internal\",\"count\":3,\"tags\":[\"controls\"]}"
+```
 
-Pass the selected user with the `X-User-Id` header. The frontend also includes a user selector.
+Supported synthetic content types:
 
-## Phases And Modules
+| Type | Purpose |
+| --- | --- |
+| `document` | Policy/SOP-style enterprise document |
+| `pdf` | PDF-like extracted text with page sections |
+| `data` | CSV-like operational dataset plus data dictionary |
+| `json` | Structured JSON policy/control content |
+| `text` | Plain text knowledge note |
+
+## 🗺️ Phase Roadmap
+
+| Phase | Name | Status | Goal |
+| --- | --- | --- | --- |
+| Phase 0 | Reference Skeleton | ✅ Done | Prove the secure enterprise RAG architecture end to end |
+| Phase 1 | Persistent RAG Foundation | 🟡 Partially Done | Replace in-memory behavior with durable storage and retrieval foundations |
+| Phase 2 | Real Ingestion Pipeline | ⏳ Planned | Support file upload, parsers, connector interfaces, and async jobs |
+| Phase 3 | Retrieval Quality | ⏳ Planned | Add embeddings, hybrid retrieval, reranking, and citation precision |
+| Phase 4 | LLM Providers And Streaming | ⏳ Planned | Add real model providers and streamed responses |
+| Phase 5 | Enterprise Security And Governance | ⏳ Planned | Add SSO, ABAC, ACL sync, DLP, and audit logging |
+| Phase 6 | Observability, Evaluation, And Cost Controls | ⏳ Planned | Add traces, quality gates, budgets, feedback, and dashboards |
+| Phase 7 | Admin And Knowledge Operations UI | ⏳ Planned | Add document management, ingestion monitoring, and operator workflows |
+| Phase 8 | Multi-Agent Workflows | ⏳ Planned | Add governed multi-step research and enterprise actions |
+
+## 📦 Phase Modules
 
 ### Phase 0: Reference Skeleton
 
-Status: done.
-
-Delivered modules:
-
-- API shell
-- Mock RBAC
-- Ingestion service
-- Chunking service
-- Retrieval placeholder
-- Mock LLM provider
-- Model router
-- Guardrails placeholder
-- Cost tracker
-- Evaluation hook
-- Basic frontend
-- Docker Compose
-- Interview and architecture docs
+| Module | Status | Notes |
+| --- | --- | --- |
+| API shell | ✅ Done | FastAPI routes and orchestration |
+| Mock RBAC | ✅ Done | User, role, department, and clearance simulation |
+| Ingestion service | ✅ Done | Text ingestion flow |
+| Chunking service | ✅ Done | LangChain recursive character chunking |
+| LlamaIndex normalization | ✅ Done | Ingestion payloads become LlamaIndex `Document` objects before chunking |
+| Retrieval placeholder | ✅ Done | Keyword overlap search |
+| Mock LLM provider | ✅ Done | Citation-aware mock answer |
+| Model router | ✅ Done | Rules-based cheap/premium routing |
+| Guardrails placeholder | ✅ Done | Prompt-injection and PII placeholder checks |
+| Cost tracker | ✅ Done | Token, latency, and cost estimation |
+| Evaluation hook | ✅ Done | Placeholder quality evaluator |
+| Basic frontend | ✅ Done | Chat and admin screens |
+| Docker Compose | ✅ Done | Backend, frontend, Postgres, Redis |
+| Docs | ✅ Done | Architecture, roadmap, interview explanation |
 
 ### Phase 1: Persistent RAG Foundation
 
-Status: partially done.
-
-Delivered modules:
-
-- SQLAlchemy database setup
-- Document repository
-- Cost repository
-- Evaluation repository
-- SQLite local persistence
-- PostgreSQL-compatible Docker persistence
-- Demo seed data
-- `uv` backend workflow
-- `pnpm` frontend workflow
-- Improved chat/admin frontend
-- Local CORS support for changing frontend ports
-
-Remaining modules:
-
-- Alembic migrations
-- Audit log repository
-- Embedding provider abstraction
-- pgvector embedding storage
-- Basic vector search
-- Metadata-filtered retrieval query layer
+| Module | Status | Notes |
+| --- | --- | --- |
+| SQLAlchemy database setup | ✅ Done | Shared database engine/session |
+| Document repository | ✅ Done | Persistent documents and chunks |
+| Cost repository | ✅ Done | Persistent cost records |
+| Evaluation repository | ✅ Done | Persistent evaluation records |
+| SQLite local persistence | ✅ Done | Backend-only mode |
+| PostgreSQL Docker persistence | ✅ Done | Full-stack mode |
+| Demo seed data | ✅ Done | Seeds usable policy data |
+| uv backend workflow | ✅ Done | `pyproject.toml` and `uv.lock` |
+| pnpm frontend workflow | ✅ Done | `pnpm-lock.yaml` |
+| Improved chat/admin frontend | ✅ Done | Better UI, typewriter animation, source panels |
+| Local CORS support | ✅ Done | Supports changing frontend ports |
+| Synthetic content generation | ✅ Done | Generates document, PDF-like, data, JSON, and text content for demos/tests |
+| Alembic migrations | ⏳ Planned | Needed before production-style DB changes |
+| Audit log repository | ⏳ Planned | Persist sensitive access events |
+| Embedding provider abstraction | ⏳ Planned | Vendor-independent embedding interface |
+| pgvector embedding storage | ⏳ Planned | Store embeddings beside chunk metadata |
+| Basic vector search | ⏳ Planned | First semantic retrieval implementation |
+| Metadata-filtered query layer | ⏳ Planned | DB-level filters by department/classification/ACL |
 
 ### Phase 2: Real Ingestion Pipeline
 
-Planned modules:
-
-- File upload endpoint
-- Parser interface
-- PDF parser
-- Office parser
-- Markdown and HTML parsers
-- Source connector interface
-- Redis-backed ingestion queue
-- Celery worker service
-- Idempotent ingestion jobs
-- Document versioning
-- Deletion and tombstone handling
+| Module | Status | Notes |
+| --- | --- | --- |
+| File upload endpoint | ⏳ Planned | Admin file ingestion |
+| Parser interface | ⏳ Planned | Common parser contract |
+| PDF parser | ⏳ Planned | Text extraction from PDF |
+| Office parser | ⏳ Planned | DOCX/PPTX/XLSX support |
+| Markdown and HTML parsers | ⏳ Planned | Web/docs content |
+| Source connector interface | ⏳ Planned | Common connector contract |
+| Redis-backed ingestion queue | ⏳ Planned | Async job dispatch |
+| Celery worker service | ⏳ Planned | Parsing/chunking/embedding jobs |
+| Idempotent ingestion jobs | ⏳ Planned | Safe retries |
+| Document versioning | ⏳ Planned | Track source revisions |
+| Deletion and tombstone handling | ⏳ Planned | Prevent stale/deleted docs surfacing |
 
 ### Phase 3: Retrieval Quality
 
-Planned modules:
-
-- Hybrid lexical + semantic retrieval
-- pgvector similarity search
-- Reranking interface
-- Context assembly service
-- Context compression
-- Citation span tracking
-- No-result and low-confidence handling
-- Retrieval evaluation tests
+| Module | Status | Notes |
+| --- | --- | --- |
+| Hybrid lexical + semantic retrieval | ⏳ Planned | Better recall and exact-match behavior |
+| pgvector similarity search | ⏳ Planned | Semantic search foundation |
+| Reranking interface | ⏳ Planned | Improve final context precision |
+| Context assembly service | ⏳ Planned | Centralize context packing |
+| Context compression | ⏳ Planned | Reduce token cost |
+| Citation span tracking | ⏳ Planned | More trustworthy citations |
+| No-result handling | ⏳ Planned | Avoid fabricated answers |
+| Low-confidence handling | ⏳ Planned | Clarify/escalate uncertain answers |
+| Retrieval evaluation tests | ⏳ Planned | Measure recall and precision |
 
 ### Phase 4: LLM Providers And Streaming
 
-Planned modules:
-
-- Real OpenAI provider
-- Anthropic provider placeholder or implementation
-- Local model provider placeholder
-- Streaming backend response endpoint
-- Streaming frontend rendering
-- Retry, timeout, and provider failover policies
-- Structured response generation
-- Provider tracing metadata
+| Module | Status | Notes |
+| --- | --- | --- |
+| Real OpenAI provider | ⏳ Planned | Replace mock fallback with SDK call |
+| Anthropic provider | ⏳ Planned | Optional second provider |
+| Local model provider | ⏳ Planned | Optional self-hosted path |
+| Streaming backend endpoint | ⏳ Planned | Token/event streaming from API |
+| Streaming frontend rendering | ⏳ Planned | Real streamed text, not local-only animation |
+| Retry and timeout policies | ⏳ Planned | Provider resilience |
+| Provider failover | ⏳ Planned | Fallback across providers/models |
+| Structured response generation | ⏳ Planned | Typed answer/citation payloads |
+| Provider tracing metadata | ⏳ Planned | Model call observability |
 
 ### Phase 5: Enterprise Security And Governance
 
-Planned modules:
-
-- SSO/JWT authentication
-- Group and department sync
-- Document-level ACL sync
-- Attribute-based access control
-- Audit log persistence
-- DLP integration placeholder
-- Secrets detection
-- Output policy checks
-- Prompt-injection classifier integration
+| Module | Status | Notes |
+| --- | --- | --- |
+| SSO/JWT authentication | ⏳ Planned | Real enterprise identity |
+| Group and department sync | ⏳ Planned | Mirror enterprise directory state |
+| Document-level ACL sync | ⏳ Planned | Source-specific permissions |
+| Attribute-based access control | ⏳ Planned | Fine-grained policy evaluation |
+| Audit log persistence | ⏳ Planned | Immutable sensitive-access record |
+| DLP integration placeholder | ⏳ Planned | Scan inputs/outputs |
+| Secrets detection | ⏳ Planned | Block leaked credentials |
+| Output policy checks | ⏳ Planned | Govern generated responses |
+| Prompt-injection classifier | ⏳ Planned | Stronger malicious prompt detection |
 
 ### Phase 6: Observability, Evaluation, And Cost Controls
 
-Planned modules:
-
-- OpenTelemetry traces
-- Request, retrieval, LLM, and evaluation spans
-- Persisted metrics dashboard data model
-- Golden evaluation datasets
-- Groundedness scoring
-- Citation precision scoring
-- User feedback capture
-- Department budgets
-- Rate limits and quotas
+| Module | Status | Notes |
+| --- | --- | --- |
+| OpenTelemetry traces | ⏳ Planned | End-to-end request visibility |
+| Request/retrieval/LLM/evaluation spans | ⏳ Planned | Debug latency and failures |
+| Metrics dashboard data model | ⏳ Planned | Persist dashboard-ready aggregates |
+| Golden evaluation datasets | ⏳ Planned | Regression testing |
+| Groundedness scoring | ⏳ Planned | Detect unsupported answers |
+| Citation precision scoring | ⏳ Planned | Check cited source relevance |
+| User feedback capture | ⏳ Planned | Improve quality loops |
+| Department budgets | ⏳ Planned | Cost governance |
+| Rate limits and quotas | ⏳ Planned | Abuse and spend control |
 
 ### Phase 7: Admin And Knowledge Operations UI
 
-Planned modules:
-
-- Document upload screen
-- Document browser
-- Connector status page
-- Ingestion job monitor
-- Cost dashboard
-- Evaluation dashboard
-- Feedback review queue
-- User and role demo switcher
+| Module | Status | Notes |
+| --- | --- | --- |
+| Document upload screen | ⏳ Planned | Operator ingestion UX |
+| Document browser | ⏳ Planned | Search/filter managed documents |
+| Connector status page | ⏳ Planned | Monitor external source sync |
+| Ingestion job monitor | ⏳ Planned | Track failures and retries |
+| Cost dashboard | ⏳ Planned | Spend by model/user/department |
+| Evaluation dashboard | ⏳ Planned | Quality and hallucination monitoring |
+| Feedback review queue | ⏳ Planned | Human review workflow |
+| User and role demo switcher | ⏳ Planned | Better demo/admin controls |
 
 ### Phase 8: Multi-Agent Workflows
 
-Planned modules:
+| Module | Status | Notes |
+| --- | --- | --- |
+| Workflow orchestration layer | ⏳ Planned | Governed multi-step execution |
+| Planner agent | ⏳ Planned | Task decomposition |
+| Retriever agent | ⏳ Planned | Source-specific lookup |
+| Policy/compliance agent | ⏳ Planned | Centralized safety review |
+| Evaluator agent | ⏳ Planned | Groundedness and quality checks |
+| Tool/action agent | ⏳ Planned | Enterprise workflow actions |
+| Human approval steps | ⏳ Planned | Required for sensitive actions |
 
-- Workflow orchestration layer
-- Planner agent
-- Retriever agent
-- Policy/compliance agent
-- Evaluator agent
-- Tool/action agent
-- Human approval steps for sensitive actions
+Important constraint: agents must reuse shared auth, retrieval, logging, cost, and evaluation services. They should not bypass the governed RAG path.
 
-Agents must reuse the shared auth, retrieval, logging, cost, and evaluation services. They should not bypass the governed RAG path.
+## 🧪 Verification Commands
 
-## Verification Commands
+| Area | Command | Expected Result |
+| --- | --- | --- |
+| Backend tests | `cd backend && uv run pytest` | Test suite passes |
+| Frontend type check | `cd frontend && pnpm exec tsc --noEmit` | TypeScript passes |
+| Frontend production build | `cd frontend && pnpm build` | Next.js build succeeds |
+| Backend health | `curl http://localhost:8000/health` | Returns `{"status":"ok",...}` |
+| Docker full stack | `cd infra && docker compose up --build` | Backend, frontend, Postgres, Redis start |
 
-Backend:
+## 📝 Current Mock Limitations
 
-```bash
-cd backend
-uv run pytest
-```
+| Limitation | What It Means | Planned Fix |
+| --- | --- | --- |
+| Mock LLM answers | The app proves orchestration but does not call a real model yet | Phase 4 real provider implementation |
+| Keyword retrieval | Retrieval is not semantic and may miss relevant paraphrases | Phase 3 hybrid search and reranking |
+| Local typewriter animation | Text animates in the UI after the full API response arrives | Phase 4 streamed backend responses |
+| Mock RBAC | Access rules are demo-only and not tied to enterprise identity | Phase 5 SSO/JWT/ABAC |
+| Placeholder guardrails | Prompt-injection and PII checks are simple pattern checks | Phase 5 DLP and classifier integration |
+| Placeholder evaluation | Quality scoring is not dataset-backed | Phase 6 golden datasets and groundedness scoring |
 
-Frontend:
+## 📚 Documentation
 
-```bash
-cd frontend
-pnpm exec tsc --noEmit
-pnpm build
-```
-
-## Notes
-
-- The current answer generation is mock-based. It proves orchestration, citations, and telemetry, but it does not yet call a real model.
-- The current retrieval is keyword overlap, not semantic retrieval.
-- The current security model is mock RBAC, not enterprise SSO/ABAC.
-- The current UI includes typewriter animation, but backend responses are not streamed yet; streaming is planned for Phase 4.
+| Document | Purpose |
+| --- | --- |
+| `docs/architecture.md` | System design and component responsibilities |
+| `docs/interview-explanation.md` | Interview-friendly explanation and follow-up answers |
+| `docs/roadmap.md` | Short roadmap summary |
+| `docs/tradeoffs.md` | Design tradeoffs |
+| `docs/whiteboard.md` | Whiteboard-style architecture notes |

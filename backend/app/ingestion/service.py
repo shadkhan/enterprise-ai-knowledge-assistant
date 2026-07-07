@@ -1,15 +1,18 @@
 from uuid import uuid4
 
-from app.ingestion.chunking import chunk_text
+from app.ingestion.chunking import chunk_llama_document
 from app.ingestion.metadata import extract_metadata
+from app.ingestion.normalization import to_llama_document
+from app.ingestion.synthetic import synthetic_content_factory
 from app.repositories.documents import document_repository
-from app.schemas.documents import DocumentChunk, DocumentCreate, DocumentSummary
+from app.schemas.documents import DocumentChunk, DocumentCreate, DocumentSummary, SyntheticContentRequest
 
 
 class IngestionService:
     def ingest(self, payload: DocumentCreate, owner_id: str) -> list[DocumentSummary]:
         document_id = f"doc-{uuid4().hex[:8]}"
         metadata = extract_metadata(payload)
+        llama_document = to_llama_document(payload, metadata)
         summary = DocumentSummary(
             document_id=document_id,
             title=payload.title,
@@ -20,9 +23,15 @@ class IngestionService:
             owner_id=owner_id,
             metadata=metadata,
         )
-        chunks = chunk_text(document_id, payload.text)
+        chunks = chunk_llama_document(document_id, llama_document)
         document_repository.save_document(summary, chunks)
         return [summary]
+
+    def ingest_synthetic(self, payload: SyntheticContentRequest, owner_id: str) -> list[DocumentSummary]:
+        summaries: list[DocumentSummary] = []
+        for document in synthetic_content_factory.build(payload):
+            summaries.extend(self.ingest(document, owner_id=owner_id))
+        return summaries
 
     def list_documents(self) -> list[DocumentSummary]:
         return document_repository.list_documents()

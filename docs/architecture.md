@@ -4,7 +4,13 @@
 
 The Enterprise AI Knowledge Assistant lets employees ask natural-language questions over internal knowledge while preserving access controls, citations, observability, cost control, and future extensibility.
 
-This repository is a reference skeleton. It uses mock providers so the architecture is easy to inspect and run, while documents, chunks, costs, and evaluations are now stored through a SQLAlchemy repository layer. Backend-only development uses SQLite by default; the `infra/` folder shows the PostgreSQL with pgvector, Redis, and containerized full-stack path.
+This repository is a reference skeleton. It uses mock providers so the architecture is easy to inspect and run, while documents, chunks, costs, and evaluations are stored through a SQLAlchemy repository layer. Backend-only development uses SQLite by default; the `infra/` folder shows the PostgreSQL with pgvector, Redis, and containerized full-stack path.
+
+The ingestion foundation now uses LangChain and LlamaIndex:
+
+- LangChain's `RecursiveCharacterTextSplitter` handles chunking.
+- LlamaIndex `Document` objects normalize ingested content before chunking.
+- A synthetic content generator creates demo/test material for document, PDF-like, data, JSON, and plain text content.
 
 ## High-level flow
 
@@ -26,6 +32,7 @@ FastAPI exposes:
 
 - `POST /chat`: permission-aware RAG answer generation
 - `POST /ingest`: document ingestion for admins and knowledge managers
+- `POST /synthetic/documents`: generate and ingest synthetic document, PDF-like, data, JSON, or text content
 - `GET /documents`: visible documents for current user
 - `GET /health`: liveness endpoint
 - `GET /metrics/cost`: admin cost summary
@@ -43,7 +50,23 @@ Production systems should integrate SSO, SCIM, group sync, document-level ACLs, 
 
 ### Ingestion
 
-The ingestion module accepts raw text, extracts metadata, chunks content, and stores document summaries/chunks through the repository layer.
+The ingestion module accepts raw text, extracts metadata, normalizes the payload into a LlamaIndex `Document`, chunks content with LangChain, and stores document summaries/chunks through the repository layer.
+
+Current ingestion flow:
+
+1. `POST /ingest` receives a `DocumentCreate` payload.
+2. Metadata is extracted from title, source type, department, classification, and tags.
+3. The payload is converted into a LlamaIndex `Document`.
+4. LangChain `RecursiveCharacterTextSplitter` splits the document text into overlapping chunks.
+5. SQLAlchemy repositories persist the document summary and chunks.
+
+The project also exposes `POST /synthetic/documents` for demo and test content. It can generate:
+
+- `document`: policy/SOP-style enterprise content
+- `pdf`: PDF-like extracted text with page sections
+- `data`: CSV-like operational data plus a data dictionary
+- `json`: structured control/policy data
+- `text`: plain text knowledge notes
 
 Production ingestion would add:
 
@@ -55,7 +78,7 @@ Production ingestion would add:
 
 ### Retrieval
 
-The current retrieval service reads persisted chunks and uses keyword overlap as a placeholder. The intended design is hybrid retrieval:
+The current retrieval service reads persisted LangChain-created chunks and uses keyword overlap as a placeholder. Embeddings are not generated yet, even though the PostgreSQL schema is pgvector-ready. The intended design is hybrid retrieval:
 
 - metadata filter by tenant, department, ACL, classification, freshness, and source
 - lexical search for exact policy names, IDs, ticket keys, and acronyms
@@ -110,6 +133,13 @@ Production telemetry should also include trace IDs, retrieval timings, reranker 
 ## Data stores
 
 PostgreSQL stores document metadata, chunks, audit logs, costs, and evaluations. pgvector stores embeddings beside chunk metadata. Redis supports caching, rate limiting, distributed locks, and queue infrastructure.
+
+Current storage behavior:
+
+- Backend-only local mode defaults to SQLite.
+- Docker full-stack mode uses PostgreSQL.
+- Document chunks are persisted as text chunks today.
+- pgvector embedding storage is planned but not yet populated by an embedding provider.
 
 ## Future multi-agent extension
 

@@ -14,7 +14,7 @@ from app.repositories.evaluations import evaluation_repository
 from app.retrieval.service import retrieval_service
 from app.routing.model_router import model_router
 from app.schemas.chat import ChatRequest, ChatResponse, Citation
-from app.schemas.documents import DocumentCreate, DocumentSummary
+from app.schemas.documents import DocumentCreate, DocumentSummary, SyntheticContentRequest
 from app.schemas.evaluation import EvaluationRequest, EvaluationResponse
 from app.security.guardrails import guardrails
 
@@ -48,6 +48,27 @@ def ingest_documents(
         extra={
             "user_id": user.user_id,
             "document_count": len(docs),
+            "department": payload.department,
+        },
+    )
+    return docs
+
+
+@router.post("/synthetic/documents", response_model=List[DocumentSummary])
+def ingest_synthetic_documents(
+    payload: SyntheticContentRequest,
+    user: User = Depends(current_user),
+) -> List[DocumentSummary]:
+    if "admin" not in user.roles and "knowledge_manager" not in user.roles:
+        raise HTTPException(status_code=403, detail="Synthetic ingestion requires admin or knowledge_manager role")
+
+    docs = ingestion_service.ingest_synthetic(payload, owner_id=user.user_id)
+    logger.info(
+        "synthetic_documents_ingested",
+        extra={
+            "user_id": user.user_id,
+            "document_count": len(docs),
+            "content_type": payload.content_type,
             "department": payload.department,
         },
     )

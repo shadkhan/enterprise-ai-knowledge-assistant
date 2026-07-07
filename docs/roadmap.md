@@ -3,7 +3,9 @@
 ## MVP
 
 - Mock RBAC and basic document ingestion
-- Text chunking and persistent document/chunk storage
+- LangChain recursive chunking and persistent document/chunk storage
+- LlamaIndex document normalization
+- Synthetic content generation for document, PDF-like, data, JSON, and text demos
 - Mock LLM provider with citations
 - Model routing placeholder
 - Persistent cost, latency, and token tracking
@@ -26,6 +28,9 @@
 - SQLite persistence for backend-only local development
 - PostgreSQL-compatible persistence for full-stack Docker runs
 - Persistent documents and chunks
+- LangChain `RecursiveCharacterTextSplitter` chunking
+- LlamaIndex `Document` normalization before chunking
+- Synthetic document endpoint at `/synthetic/documents`
 - Persistent cost records and admin cost summaries
 - Persistent evaluation records
 - Automatic demo seed document
