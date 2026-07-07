@@ -6,6 +6,9 @@
 - LangChain recursive chunking and persistent document/chunk storage
 - LlamaIndex document normalization
 - Synthetic content generation for document, PDF-like, data, JSON, and text demos
+- Redis-backed ingestion jobs and worker process
+- Mock embedding provider during ingestion
+- Redis-backed retrieval caching
 - Mock LLM provider with citations
 - Model routing placeholder
 - Persistent cost, latency, and token tracking
@@ -31,6 +34,10 @@
 - LangChain `RecursiveCharacterTextSplitter` chunking
 - LlamaIndex `Document` normalization before chunking
 - Synthetic document endpoint at `/synthetic/documents`
+- Redis-backed ingestion job endpoints
+- Worker service for async document and synthetic ingestion
+- Mock embedding generation attached to chunk metadata
+- Short-lived Redis retrieval cache
 - Persistent cost records and admin cost summaries
 - Persistent evaluation records
 - Automatic demo seed document

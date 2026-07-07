@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
   id TEXT PRIMARY KEY,
   document_id TEXT NOT NULL REFERENCES documents(id),
   body TEXT NOT NULL,
-  embedding vector(1536),
+  embedding vector(384),
   metadata JSONB NOT NULL DEFAULT '{}'
 );
 

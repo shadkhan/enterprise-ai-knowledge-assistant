@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from app.auth.rbac import User, authorize_document, get_mock_user
 from app.cost.tracker import cost_tracker
 from app.evaluation.service import evaluator
+from app.ingestion.jobs import ingestion_job_queue
 from app.ingestion.service import ingestion_service
 from app.llm.factory import get_llm_provider
 from app.observability.logging import get_logger
@@ -14,7 +15,14 @@ from app.repositories.evaluations import evaluation_repository
 from app.retrieval.service import retrieval_service
 from app.routing.model_router import model_router
 from app.schemas.chat import ChatRequest, ChatResponse, Citation
-from app.schemas.documents import DocumentCreate, DocumentSummary, SyntheticContentRequest
+from app.schemas.documents import (
+    DocumentCreate,
+    DocumentSummary,
+    IngestionJobCreate,
+    IngestionJobStatus,
+    SyntheticContentRequest,
+    SyntheticIngestionJobCreate,
+)
 from app.schemas.evaluation import EvaluationRequest, EvaluationResponse
 from app.security.guardrails import guardrails
 
@@ -73,6 +81,42 @@ def ingest_synthetic_documents(
         },
     )
     return docs
+
+
+@router.post("/ingest/jobs", response_model=IngestionJobStatus)
+def create_ingestion_job(
+    payload: IngestionJobCreate,
+    user: User = Depends(current_user),
+) -> IngestionJobStatus:
+    if "admin" not in user.roles and "knowledge_manager" not in user.roles:
+        raise HTTPException(status_code=403, detail="Ingestion jobs require admin or knowledge_manager role")
+    try:
+        return ingestion_job_queue.enqueue_document(payload, owner_id=user.user_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/synthetic/jobs", response_model=IngestionJobStatus)
+def create_synthetic_ingestion_job(
+    payload: SyntheticIngestionJobCreate,
+    user: User = Depends(current_user),
+) -> IngestionJobStatus:
+    if "admin" not in user.roles and "knowledge_manager" not in user.roles:
+        raise HTTPException(status_code=403, detail="Synthetic ingestion jobs require admin or knowledge_manager role")
+    try:
+        return ingestion_job_queue.enqueue_synthetic(payload, owner_id=user.user_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/ingest/jobs/{job_id}", response_model=IngestionJobStatus)
+def get_ingestion_job(job_id: str, user: User = Depends(current_user)) -> IngestionJobStatus:
+    status = ingestion_job_queue.get_status(job_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Ingestion job not found")
+    if "admin" not in user.roles and status.owner_id != user.user_id:
+        raise HTTPException(status_code=403, detail="Cannot view another user's ingestion job")
+    return status
 
 
 @router.get("/documents", response_model=List[DocumentSummary])

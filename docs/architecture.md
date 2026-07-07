@@ -11,6 +11,9 @@ The ingestion foundation now uses LangChain and LlamaIndex:
 - LangChain's `RecursiveCharacterTextSplitter` handles chunking.
 - LlamaIndex `Document` objects normalize ingested content before chunking.
 - A synthetic content generator creates demo/test material for document, PDF-like, data, JSON, and plain text content.
+- Redis-backed ingestion jobs let the API enqueue work for a separate worker process.
+- A mock embedding provider generates deterministic demo embeddings during ingestion.
+- Redis also provides a short-lived retrieval cache for repeated authorized searches.
 
 ## High-level flow
 
@@ -33,6 +36,9 @@ FastAPI exposes:
 - `POST /chat`: permission-aware RAG answer generation
 - `POST /ingest`: document ingestion for admins and knowledge managers
 - `POST /synthetic/documents`: generate and ingest synthetic document, PDF-like, data, JSON, or text content
+- `POST /ingest/jobs`: enqueue an asynchronous document ingestion job
+- `POST /synthetic/jobs`: enqueue an asynchronous synthetic ingestion job
+- `GET /ingest/jobs/{job_id}`: inspect ingestion job status
 - `GET /documents`: visible documents for current user
 - `GET /health`: liveness endpoint
 - `GET /metrics/cost`: admin cost summary
@@ -58,7 +64,16 @@ Current ingestion flow:
 2. Metadata is extracted from title, source type, department, classification, and tags.
 3. The payload is converted into a LlamaIndex `Document`.
 4. LangChain `RecursiveCharacterTextSplitter` splits the document text into overlapping chunks.
-5. SQLAlchemy repositories persist the document summary and chunks.
+5. The mock embedding provider generates deterministic embeddings for each chunk.
+6. SQLAlchemy repositories persist the document summary and chunks, including embedding metadata.
+
+Async ingestion flow:
+
+1. `POST /ingest/jobs` or `POST /synthetic/jobs` creates a Redis-backed job record.
+2. The API pushes a job message onto the ingestion queue.
+3. The worker process pops queued jobs from Redis.
+4. The worker runs the same normalization, chunking, embedding, and persistence path as synchronous ingestion.
+5. Job status moves through `queued`, `running`, `completed`, or `failed`.
 
 The project also exposes `POST /synthetic/documents` for demo and test content. It can generate:
 
@@ -78,7 +93,7 @@ Production ingestion would add:
 
 ### Retrieval
 
-The current retrieval service reads persisted LangChain-created chunks and uses keyword overlap as a placeholder. Embeddings are not generated yet, even though the PostgreSQL schema is pgvector-ready. The intended design is hybrid retrieval:
+The current retrieval service reads persisted LangChain-created chunks and uses keyword overlap as a placeholder. Mock embeddings are generated during ingestion and attached to chunk metadata, but pgvector storage/querying is not wired into retrieval yet. The intended design is hybrid retrieval:
 
 - metadata filter by tenant, department, ACL, classification, freshness, and source
 - lexical search for exact policy names, IDs, ticket keys, and acronyms
@@ -86,6 +101,13 @@ The current retrieval service reads persisted LangChain-created chunks and uses 
 - reranking for final context ordering
 
 The most important production rule is security-first retrieval: filter unauthorized documents before they can reach the model context.
+
+Current caching behavior:
+
+- Retrieval results are cached in Redis using the query, user identity, roles, department, clearance, and `top_k`.
+- Cache entries have a short TTL.
+- Ingestion clears retrieval cache entries so newly ingested documents can be discovered.
+- If Redis is unavailable, retrieval still works without caching.
 
 ### LLM abstraction
 
@@ -138,8 +160,9 @@ Current storage behavior:
 
 - Backend-only local mode defaults to SQLite.
 - Docker full-stack mode uses PostgreSQL.
-- Document chunks are persisted as text chunks today.
-- pgvector embedding storage is planned but not yet populated by an embedding provider.
+- Document chunks are persisted as text chunks with mock embedding metadata today.
+- pgvector embedding search is planned but not yet used by retrieval.
+- Redis stores ingestion queue messages, job status records, and retrieval cache entries.
 
 ## Future multi-agent extension
 

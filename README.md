@@ -24,6 +24,9 @@ The current project is a runnable MVP plus part of the persistent RAG foundation
 | Storage | SQLAlchemy repositories with SQLite for backend-only local mode and PostgreSQL for Docker mode |
 | Chunking | LangChain `RecursiveCharacterTextSplitter` |
 | Document normalization | LlamaIndex `Document` objects before chunking |
+| Ingestion jobs | Redis-backed queue with worker process and status API |
+| Embeddings | Deterministic mock embedding provider attached to chunk metadata |
+| Cache | Redis retrieval cache with short TTL and ingestion-time invalidation |
 | Retrieval | Keyword overlap over authorized chunks |
 | LLM | Mock provider plus OpenAI provider placeholder |
 | UI | Next.js chat UI with conversation history, source panel, visible documents, user selector, quality selector, and typewriter animation |
@@ -38,6 +41,9 @@ The current project is a runnable MVP plus part of the persistent RAG foundation
 | Chat API | ✅ Done | Returns answer, citations, model, provider, latency, tokens, and cost |
 | Document ingestion | ✅ Done | Accepts text documents through `/ingest` |
 | Synthetic ingestion | ✅ Done | Generates synthetic `document`, `pdf`, `data`, `json`, and `text` content through `/synthetic/documents` |
+| Async ingestion jobs | ✅ Done | `POST /ingest/jobs`, `POST /synthetic/jobs`, and `GET /ingest/jobs/{job_id}` |
+| Mock embeddings | ✅ Done | Generated during ingestion and attached to chunk metadata |
+| Retrieval cache | ✅ Done | Redis-backed short-lived cache for repeated authorized searches |
 | Document visibility | ✅ Done | Filters by mock user role, department, and clearance |
 | Persistence | ✅ Done | Documents, chunks, costs, and evaluations persist |
 | Demo seed data | ✅ Done | Seeds a `Remote Work Policy` document when DB is empty |
@@ -50,7 +56,7 @@ The current project is a runnable MVP plus part of the persistent RAG foundation
 | Area | Limitation | Planned Phase |
 | --- | --- | --- |
 | Retrieval | Uses keyword overlap, not semantic or hybrid retrieval | Phase 3 |
-| Embeddings | pgvector schema exists, but embeddings are not generated yet | Phase 1 / Phase 3 |
+| Embeddings | Mock embeddings exist, but pgvector storage/search is not wired yet | Phase 3 |
 | LLM | Answers come from mock provider | Phase 4 |
 | Streaming | UI animates text locally, but backend does not stream tokens yet | Phase 4 |
 | Ingestion | No real file upload, parsing, OCR, or connector sync yet | Phase 2 |
@@ -80,6 +86,8 @@ Persistence + Logs + Evaluation Hooks
 | Backend | FastAPI, Pydantic, SQLAlchemy |
 | LangChain | Framework dependency plus `RecursiveCharacterTextSplitter` for chunking |
 | Document normalization | LlamaIndex core |
+| Queue/cache | Redis list, job status records, and retrieval cache |
+| Embeddings | Mock embedding provider interface |
 | Python tooling | uv |
 | Frontend | Next.js, React, Tailwind CSS |
 | Node tooling | pnpm |
@@ -216,13 +224,38 @@ Supported synthetic content types:
 | `json` | Structured JSON policy/control content |
 | `text` | Plain text knowledge note |
 
+Create an async ingestion job:
+
+```bash
+curl -X POST http://localhost:8000/ingest/jobs \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: u-admin" \
+  -d "{\"document\":{\"title\":\"Async Policy\",\"text\":\"Async ingestion should queue, chunk, embed, and persist this document.\",\"department\":\"Global\",\"classification\":\"internal\",\"source_type\":\"manual\",\"tags\":[\"async\"]},\"generate_embeddings\":true}"
+```
+
+Create an async synthetic ingestion job:
+
+```bash
+curl -X POST http://localhost:8000/synthetic/jobs \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: u-admin" \
+  -d "{\"synthetic\":{\"content_type\":\"data\",\"topic\":\"Quarterly Controls\",\"department\":\"Global\",\"classification\":\"internal\",\"count\":2},\"generate_embeddings\":true}"
+```
+
+Check job status:
+
+```bash
+curl http://localhost:8000/ingest/jobs/{job_id} \
+  -H "X-User-Id: u-admin"
+```
+
 ## 🗺️ Phase Roadmap
 
 | Phase | Name | Status | Goal |
 | --- | --- | --- | --- |
 | Phase 0 | Reference Skeleton | ✅ Done | Prove the secure enterprise RAG architecture end to end |
 | Phase 1 | Persistent RAG Foundation | 🟡 Partially Done | Replace in-memory behavior with durable storage and retrieval foundations |
-| Phase 2 | Real Ingestion Pipeline | ⏳ Planned | Support file upload, parsers, connector interfaces, and async jobs |
+| Phase 2 | Real Ingestion Pipeline | 🟡 Started | Support file upload, parsers, connector interfaces, and async jobs |
 | Phase 3 | Retrieval Quality | ⏳ Planned | Add embeddings, hybrid retrieval, reranking, and citation precision |
 | Phase 4 | LLM Providers And Streaming | ⏳ Planned | Add real model providers and streamed responses |
 | Phase 5 | Enterprise Security And Governance | ⏳ Planned | Add SSO, ABAC, ACL sync, DLP, and audit logging |
@@ -267,6 +300,8 @@ Supported synthetic content types:
 | Improved chat/admin frontend | ✅ Done | Better UI, typewriter animation, source panels |
 | Local CORS support | ✅ Done | Supports changing frontend ports |
 | Synthetic content generation | ✅ Done | Generates document, PDF-like, data, JSON, and text content for demos/tests |
+| Mock embedding provider | ✅ Done | Deterministic embedding interface for ingestion tests and demos |
+| Retrieval cache | ✅ Done | Redis-backed cache cleared after ingestion |
 | Alembic migrations | ⏳ Planned | Needed before production-style DB changes |
 | Audit log repository | ⏳ Planned | Persist sensitive access events |
 | Embedding provider abstraction | ⏳ Planned | Vendor-independent embedding interface |
@@ -278,14 +313,20 @@ Supported synthetic content types:
 
 | Module | Status | Notes |
 | --- | --- | --- |
+| Redis ingestion queue | ✅ Done | Queue messages are stored in Redis |
+| Worker service | ✅ Done | Docker Compose includes a backend worker process |
+| Job status API | ✅ Done | `queued`, `running`, `completed`, and `failed` states |
+| Async document ingestion job | ✅ Done | `POST /ingest/jobs` |
+| Async synthetic ingestion job | ✅ Done | `POST /synthetic/jobs` |
+| Mock embedding generation | ✅ Done | Runs during sync and async ingestion |
+| Retrieval cache | ✅ Done | Caches repeated authorized search results for a short TTL |
 | File upload endpoint | ⏳ Planned | Admin file ingestion |
 | Parser interface | ⏳ Planned | Common parser contract |
 | PDF parser | ⏳ Planned | Text extraction from PDF |
 | Office parser | ⏳ Planned | DOCX/PPTX/XLSX support |
 | Markdown and HTML parsers | ⏳ Planned | Web/docs content |
 | Source connector interface | ⏳ Planned | Common connector contract |
-| Redis-backed ingestion queue | ⏳ Planned | Async job dispatch |
-| Celery worker service | ⏳ Planned | Parsing/chunking/embedding jobs |
+| Celery worker service | ⏳ Planned | Optional production-grade worker upgrade |
 | Idempotent ingestion jobs | ⏳ Planned | Safe retries |
 | Document versioning | ⏳ Planned | Track source revisions |
 | Deletion and tombstone handling | ⏳ Planned | Prevent stale/deleted docs surfacing |
@@ -388,6 +429,7 @@ Important constraint: agents must reuse shared auth, retrieval, logging, cost, a
 | Limitation | What It Means | Planned Fix |
 | --- | --- | --- |
 | Mock LLM answers | The app proves orchestration but does not call a real model yet | Phase 4 real provider implementation |
+| Mock embeddings | Embeddings are deterministic demo vectors, not semantic model embeddings | Phase 3 real embedding provider and pgvector search |
 | Keyword retrieval | Retrieval is not semantic and may miss relevant paraphrases | Phase 3 hybrid search and reranking |
 | Local typewriter animation | Text animates in the UI after the full API response arrives | Phase 4 streamed backend responses |
 | Mock RBAC | Access rules are demo-only and not tied to enterprise identity | Phase 5 SSO/JWT/ABAC |

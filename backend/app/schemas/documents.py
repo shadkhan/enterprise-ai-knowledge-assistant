@@ -25,6 +25,7 @@ class DocumentChunk(BaseModel):
     chunk_id: str
     document_id: str
     text: str
+    embedding: list[float] | None = None
 
 
 class SyntheticContentRequest(BaseModel):
@@ -34,3 +35,25 @@ class SyntheticContentRequest(BaseModel):
     classification: str = Field(default="internal", pattern="^(public|internal|restricted)$")
     count: int = Field(default=4, ge=1, le=25)
     tags: list[str] = Field(default_factory=list)
+
+
+class IngestionJobCreate(BaseModel):
+    document: DocumentCreate
+    generate_embeddings: bool = True
+
+
+class SyntheticIngestionJobCreate(BaseModel):
+    synthetic: SyntheticContentRequest
+    generate_embeddings: bool = True
+
+
+class IngestionJobStatus(BaseModel):
+    job_id: str
+    status: str
+    job_type: str
+    owner_id: str
+    created_at: str
+    updated_at: str
+    document_count: int = 0
+    error: str | None = None
+    result_document_ids: list[str] = Field(default_factory=list)
