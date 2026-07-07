@@ -25,10 +25,10 @@ The current project is a runnable MVP plus part of the persistent RAG foundation
 | Chunking | LangChain `RecursiveCharacterTextSplitter` |
 | Document normalization | LlamaIndex `Document` objects before chunking |
 | Ingestion jobs | Redis-backed queue with worker process and status API |
-| Embeddings | Deterministic mock embedding provider attached to chunk metadata |
+| Embeddings | Mock provider by default; optional Hugging Face `sentence-transformers/all-MiniLM-L6-v2` provider |
 | Cache | Redis retrieval cache with short TTL and ingestion-time invalidation |
-| Retrieval | Keyword overlap over authorized chunks |
-| LLM | Mock provider plus OpenAI provider placeholder |
+| Retrieval | Hybrid lexical + vector retrieval with pgvector on Postgres and metadata fallback on SQLite |
+| LLM | Mock provider, OpenAI-compatible mock provider, and optional real OpenAI Responses API provider |
 | UI | Next.js chat UI with conversation history, source panel, visible documents, user selector, quality selector, and typewriter animation |
 | Observability | Structured logs plus persisted cost/evaluation records |
 | Package Managers | `uv` for Python, `pnpm` for Node/Next.js |
@@ -42,7 +42,8 @@ The current project is a runnable MVP plus part of the persistent RAG foundation
 | Document ingestion | ✅ Done | Accepts text documents through `/ingest` |
 | Synthetic ingestion | ✅ Done | Generates synthetic `document`, `pdf`, `data`, `json`, and `text` content through `/synthetic/documents` |
 | Async ingestion jobs | ✅ Done | `POST /ingest/jobs`, `POST /synthetic/jobs`, and `GET /ingest/jobs/{job_id}` |
-| Mock embeddings | ✅ Done | Generated during ingestion and attached to chunk metadata |
+| Hugging Face embeddings | ✅ Done | Optional local provider using `sentence-transformers/all-MiniLM-L6-v2` |
+| Mock embeddings | ✅ Done | Default fast provider for tests and lightweight demos |
 | Retrieval cache | ✅ Done | Redis-backed short-lived cache for repeated authorized searches |
 | Document visibility | ✅ Done | Filters by mock user role, department, and clearance |
 | Persistence | ✅ Done | Documents, chunks, costs, and evaluations persist |
@@ -55,9 +56,9 @@ The current project is a runnable MVP plus part of the persistent RAG foundation
 
 | Area | Limitation | Planned Phase |
 | --- | --- | --- |
-| Retrieval | Uses keyword overlap, not semantic or hybrid retrieval | Phase 3 |
-| Embeddings | Mock embeddings exist, but pgvector storage/search is not wired yet | Phase 3 |
-| LLM | Answers come from mock provider | Phase 4 |
+| Retrieval | Hybrid retrieval exists, but reranking and quality evaluation are still basic | Phase 3 |
+| Embeddings | Hugging Face provider is optional; Docker defaults to mock unless embeddings group is installed | Phase 3 |
+| LLM | Mock and OpenAI-compatible paths work; real OpenAI provider is optional and env-driven | Phase 4 |
 | Streaming | UI animates text locally, but backend does not stream tokens yet | Phase 4 |
 | Ingestion | No real file upload, parsing, OCR, or connector sync yet | Phase 2 |
 | Security | Mock RBAC only; no SSO, ABAC, DLP, or enterprise audit trail yet | Phase 5 |
@@ -87,7 +88,9 @@ Persistence + Logs + Evaluation Hooks
 | LangChain | Framework dependency plus `RecursiveCharacterTextSplitter` for chunking |
 | Document normalization | LlamaIndex core |
 | Queue/cache | Redis list, job status records, and retrieval cache |
-| Embeddings | Mock embedding provider interface |
+| Embeddings | Mock provider and optional Hugging Face sentence-transformers provider |
+| LLM providers | Mock, OpenAI-compatible mock, optional OpenAI SDK provider |
+| Vector search | pgvector on Postgres, metadata-vector fallback on SQLite |
 | Python tooling | uv |
 | Frontend | Next.js, React, Tailwind CSS |
 | Node tooling | pnpm |
@@ -97,6 +100,8 @@ Persistence + Logs + Evaluation Hooks
 | Containers | Docker Compose |
 
 ## 🚀 Quick Start: Full Stack
+
+For a complete run-and-test walkthrough, see [`docs/user-guide.md`](docs/user-guide.md).
 
 From the repo root:
 
@@ -129,6 +134,54 @@ The backend allows local frontend origins on any port, so `localhost:3000`, `loc
 cd backend
 uv --system-certs sync
 uv run uvicorn app.main:app --reload
+```
+
+Enable local Hugging Face embeddings:
+
+```powershell
+cd backend
+uv --system-certs sync --group embeddings
+$env:DEFAULT_EMBEDDING_PROVIDER="huggingface"
+$env:EMBEDDING_MODEL="sentence-transformers/all-MiniLM-L6-v2"
+uv run uvicorn app.main:app --reload
+```
+
+Build Docker images with Hugging Face embedding dependencies:
+
+```bash
+cd infra
+docker compose build --build-arg INSTALL_EMBEDDINGS=true backend worker
+docker compose up
+```
+
+Enable the OpenAI-compatible mock provider:
+
+```powershell
+cd backend
+$env:DEFAULT_LLM_PROVIDER="openai_mock"
+uv run uvicorn app.main:app --reload
+```
+
+Enable the real OpenAI provider:
+
+```powershell
+cd backend
+uv --system-certs sync --group llm
+$env:DEFAULT_LLM_PROVIDER="openai"
+$env:OPENAI_API_KEY="your-api-key"
+$env:OPENAI_CHEAP_MODEL="gpt-4o-mini"
+$env:OPENAI_PREMIUM_MODEL="gpt-4o"
+uv run uvicorn app.main:app --reload
+```
+
+The real provider uses the OpenAI Responses API and falls back to the OpenAI-compatible mock when `OPENAI_FALLBACK_TO_MOCK=true`.
+
+Build Docker images with OpenAI SDK dependencies:
+
+```bash
+cd infra
+docker compose build --build-arg INSTALL_LLM=true backend worker
+docker compose up
 ```
 
 Open:
@@ -256,8 +309,8 @@ curl http://localhost:8000/ingest/jobs/{job_id} \
 | Phase 0 | Reference Skeleton | ✅ Done | Prove the secure enterprise RAG architecture end to end |
 | Phase 1 | Persistent RAG Foundation | 🟡 Partially Done | Replace in-memory behavior with durable storage and retrieval foundations |
 | Phase 2 | Real Ingestion Pipeline | 🟡 Started | Support file upload, parsers, connector interfaces, and async jobs |
-| Phase 3 | Retrieval Quality | ⏳ Planned | Add embeddings, hybrid retrieval, reranking, and citation precision |
-| Phase 4 | LLM Providers And Streaming | ⏳ Planned | Add real model providers and streamed responses |
+| Phase 3 | Retrieval Quality | 🟡 Started | Add embeddings, hybrid retrieval, reranking, and citation precision |
+| Phase 4 | LLM Providers And Streaming | 🟡 Started | Add real model providers and streamed responses |
 | Phase 5 | Enterprise Security And Governance | ⏳ Planned | Add SSO, ABAC, ACL sync, DLP, and audit logging |
 | Phase 6 | Observability, Evaluation, And Cost Controls | ⏳ Planned | Add traces, quality gates, budgets, feedback, and dashboards |
 | Phase 7 | Admin And Knowledge Operations UI | ⏳ Planned | Add document management, ingestion monitoring, and operator workflows |
@@ -276,6 +329,7 @@ curl http://localhost:8000/ingest/jobs/{job_id} \
 | LlamaIndex normalization | ✅ Done | Ingestion payloads become LlamaIndex `Document` objects before chunking |
 | Retrieval placeholder | ✅ Done | Keyword overlap search |
 | Mock LLM provider | ✅ Done | Citation-aware mock answer |
+| OpenAI-compatible mock provider | ✅ Done | Tests OpenAI-shaped prompt construction, routing, fallback, and cost tracking without API calls |
 | Model router | ✅ Done | Rules-based cheap/premium routing |
 | Guardrails placeholder | ✅ Done | Prompt-injection and PII placeholder checks |
 | Cost tracker | ✅ Done | Token, latency, and cost estimation |
@@ -304,9 +358,9 @@ curl http://localhost:8000/ingest/jobs/{job_id} \
 | Retrieval cache | ✅ Done | Redis-backed cache cleared after ingestion |
 | Alembic migrations | ⏳ Planned | Needed before production-style DB changes |
 | Audit log repository | ⏳ Planned | Persist sensitive access events |
-| Embedding provider abstraction | ⏳ Planned | Vendor-independent embedding interface |
-| pgvector embedding storage | ⏳ Planned | Store embeddings beside chunk metadata |
-| Basic vector search | ⏳ Planned | First semantic retrieval implementation |
+| Embedding provider abstraction | ✅ Done | Mock and Hugging Face providers |
+| pgvector embedding storage | ✅ Done | Postgres `document_chunks.embedding vector(384)` |
+| Basic vector search | ✅ Done | pgvector on Postgres, metadata fallback on SQLite |
 | Metadata-filtered query layer | ⏳ Planned | DB-level filters by department/classification/ACL |
 
 ### Phase 2: Real Ingestion Pipeline
@@ -335,8 +389,8 @@ curl http://localhost:8000/ingest/jobs/{job_id} \
 
 | Module | Status | Notes |
 | --- | --- | --- |
-| Hybrid lexical + semantic retrieval | ⏳ Planned | Better recall and exact-match behavior |
-| pgvector similarity search | ⏳ Planned | Semantic search foundation |
+| Hybrid lexical + semantic retrieval | ✅ Done | Weighted lexical + vector ranking |
+| pgvector similarity search | ✅ Done | Semantic search foundation for Postgres |
 | Reranking interface | ⏳ Planned | Improve final context precision |
 | Context assembly service | ⏳ Planned | Centralize context packing |
 | Context compression | ⏳ Planned | Reduce token cost |
@@ -349,7 +403,9 @@ curl http://localhost:8000/ingest/jobs/{job_id} \
 
 | Module | Status | Notes |
 | --- | --- | --- |
-| Real OpenAI provider | ⏳ Planned | Replace mock fallback with SDK call |
+| Real OpenAI provider | ✅ Done | Optional SDK provider using the Responses API with mock fallback |
+| OpenAI-compatible mock provider | ✅ Done | Tests prompt construction, routing, fallback, and cost tracking without API calls |
+| Provider fallback | ✅ Done | Real OpenAI path can fall back to OpenAI-compatible mock |
 | Anthropic provider | ⏳ Planned | Optional second provider |
 | Local model provider | ⏳ Planned | Optional self-hosted path |
 | Streaming backend endpoint | ⏳ Planned | Token/event streaming from API |
@@ -428,9 +484,9 @@ Important constraint: agents must reuse shared auth, retrieval, logging, cost, a
 
 | Limitation | What It Means | Planned Fix |
 | --- | --- | --- |
-| Mock LLM answers | The app proves orchestration but does not call a real model yet | Phase 4 real provider implementation |
-| Mock embeddings | Embeddings are deterministic demo vectors, not semantic model embeddings | Phase 3 real embedding provider and pgvector search |
-| Keyword retrieval | Retrieval is not semantic and may miss relevant paraphrases | Phase 3 hybrid search and reranking |
+| Mock LLM default | The default provider is still mock so the app runs without API keys | Set `DEFAULT_LLM_PROVIDER=openai` and `OPENAI_API_KEY` |
+| Mock embeddings | Default embeddings are deterministic demo vectors unless Hugging Face provider is enabled | Enable `DEFAULT_EMBEDDING_PROVIDER=huggingface` |
+| Retrieval quality | Hybrid retrieval exists, but reranking and citation precision are still basic | Phase 3 reranking and retrieval evaluation |
 | Local typewriter animation | Text animates in the UI after the full API response arrives | Phase 4 streamed backend responses |
 | Mock RBAC | Access rules are demo-only and not tied to enterprise identity | Phase 5 SSO/JWT/ABAC |
 | Placeholder guardrails | Prompt-injection and PII checks are simple pattern checks | Phase 5 DLP and classifier integration |
@@ -441,6 +497,7 @@ Important constraint: agents must reuse shared auth, retrieval, logging, cost, a
 | Document | Purpose |
 | --- | --- |
 | `docs/architecture.md` | System design and component responsibilities |
+| `docs/user-guide.md` | Step-by-step run, test, demo, and troubleshooting guide |
 | `docs/interview-explanation.md` | Interview-friendly explanation and follow-up answers |
 | `docs/roadmap.md` | Short roadmap summary |
 | `docs/tradeoffs.md` | Design tradeoffs |

@@ -16,6 +16,8 @@ class CostTracker:
     PRICES_PER_1K = {
         "cheap-fast-model": 0.0002,
         "premium-reasoning-model": 0.002,
+        "gpt-4o-mini": 0.00015,
+        "gpt-4o": 0.005,
     }
 
     def __init__(self) -> None:
@@ -64,4 +66,3 @@ class CostTracker:
 
 
 cost_tracker = CostTracker()
-

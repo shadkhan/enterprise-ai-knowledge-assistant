@@ -12,7 +12,7 @@ The ingestion foundation now uses LangChain and LlamaIndex:
 - LlamaIndex `Document` objects normalize ingested content before chunking.
 - A synthetic content generator creates demo/test material for document, PDF-like, data, JSON, and plain text content.
 - Redis-backed ingestion jobs let the API enqueue work for a separate worker process.
-- A mock embedding provider generates deterministic demo embeddings during ingestion.
+- Embedding providers support deterministic mock vectors by default and optional local Hugging Face embeddings with `sentence-transformers/all-MiniLM-L6-v2`.
 - Redis also provides a short-lived retrieval cache for repeated authorized searches.
 
 ## High-level flow
@@ -22,7 +22,7 @@ The ingestion foundation now uses LangChain and LlamaIndex:
 3. Security guardrails inspect the prompt for injection patterns and redact obvious PII.
 4. The model router selects a cheap or premium model based on query complexity and requested quality.
 5. Retrieval searches authorized document chunks only.
-6. The LLM provider generates an answer from retrieved context.
+6. The LLM provider generates an answer from retrieved context. The provider can be the default mock, an OpenAI-compatible mock, or the real OpenAI Responses API provider.
 7. The response includes citations, token usage, latency, model/provider, and estimated cost.
 8. Structured JSON logs emit observability-friendly events.
 9. Evaluation hooks can score the answer after generation.
@@ -91,13 +91,20 @@ Production ingestion would add:
 - asynchronous workers via Celery and Redis
 - embeddings written to pgvector
 
-### Retrieval
+### Embeddings And Retrieval
 
-The current retrieval service reads persisted LangChain-created chunks and uses keyword overlap as a placeholder. Mock embeddings are generated during ingestion and attached to chunk metadata, but pgvector storage/querying is not wired into retrieval yet. The intended design is hybrid retrieval:
+The current retrieval service reads persisted LangChain-created chunks and supports hybrid lexical + vector retrieval. In lightweight SQLite mode, vectors are stored in chunk metadata and searched with an in-process cosine fallback. In PostgreSQL mode, embeddings are written to `document_chunks.embedding vector(384)` and searched with pgvector cosine distance.
+
+Embedding providers:
+
+- `mock`: deterministic local vectors for tests and fast demos
+- `huggingface`: optional local `sentence-transformers/all-MiniLM-L6-v2` embeddings
+
+The intended production design continues to evolve toward higher-quality hybrid retrieval:
 
 - metadata filter by tenant, department, ACL, classification, freshness, and source
 - lexical search for exact policy names, IDs, ticket keys, and acronyms
-- vector search for semantic recall
+- vector search for semantic recall through pgvector
 - reranking for final context ordering
 
 The most important production rule is security-first retrieval: filter unauthorized documents before they can reach the model context.
@@ -111,7 +118,15 @@ Current caching behavior:
 
 ### LLM abstraction
 
-The `llm` package defines a provider interface and mock/OpenAI placeholder providers. This keeps request orchestration independent from vendor-specific SDKs.
+The `llm` package defines a provider interface plus three current implementations:
+
+| Provider | Purpose |
+| --- | --- |
+| `mock` | Fast deterministic local provider for demos and tests |
+| `openai_mock` | OpenAI-shaped mock that validates prompt construction, routing, fallback, and cost tracking without external calls |
+| `openai` | Optional real OpenAI SDK provider using the Responses API |
+
+The model router selects provider-specific cheap and premium model names from configuration. The real OpenAI provider uses retrieved authorized context as input and can fall back to `openai_mock` when the API key, SDK, network, or provider call is unavailable.
 
 Production providers should support retries, timeouts, streaming, tool calls, structured output, safety settings, and tracing metadata.
 
@@ -160,8 +175,9 @@ Current storage behavior:
 
 - Backend-only local mode defaults to SQLite.
 - Docker full-stack mode uses PostgreSQL.
-- Document chunks are persisted as text chunks with mock embedding metadata today.
-- pgvector embedding search is planned but not yet used by retrieval.
+- Document chunks are persisted as text chunks with embedding metadata in SQLite mode.
+- PostgreSQL stores 384-dimensional embeddings in pgvector.
+- Retrieval can run hybrid lexical + vector ranking.
 - Redis stores ingestion queue messages, job status records, and retrieval cache entries.
 
 ## Future multi-agent extension

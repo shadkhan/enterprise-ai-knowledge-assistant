@@ -7,9 +7,10 @@
 - LlamaIndex document normalization
 - Synthetic content generation for document, PDF-like, data, JSON, and text demos
 - Redis-backed ingestion jobs and worker process
-- Mock embedding provider during ingestion
+- Mock embedding provider and optional Hugging Face embedding provider
 - Redis-backed retrieval caching
 - Mock LLM provider with citations
+- OpenAI-compatible mock provider and optional real OpenAI provider
 - Model routing placeholder
 - Persistent cost, latency, and token tracking
 - Structured JSON logs
@@ -20,7 +21,7 @@
 - Database migrations and audit log persistence
 - pgvector embeddings and hybrid retrieval
 - Real file upload and parsers for PDF, Office, Markdown, and HTML
-- OpenAI or approved provider integration
+- OpenAI provider hardening and approved second-provider integration
 - Celery workers for ingestion and embedding
 - SSO integration and enterprise group sync
 - Feedback capture on answers
@@ -36,7 +37,11 @@
 - Synthetic document endpoint at `/synthetic/documents`
 - Redis-backed ingestion job endpoints
 - Worker service for async document and synthetic ingestion
-- Mock embedding generation attached to chunk metadata
+- Mock/Hugging Face embedding generation attached to chunk metadata
+- pgvector vector storage and basic vector search
+- Hybrid lexical + vector retrieval
+- OpenAI-compatible mock provider
+- Optional real OpenAI Responses API provider with fallback
 - Short-lived Redis retrieval cache
 - Persistent cost records and admin cost summaries
 - Persistent evaluation records
@@ -49,6 +54,7 @@
 
 - Confluence, SharePoint, Jira, and internal KB connectors
 - Reranking and context compression
+- Semantic answer cache with permission-aware cache keys
 - Advanced prompt-injection and DLP controls
 - Golden evaluation datasets and CI quality gates
 - Department-level budgets, quotas, and rate limits
