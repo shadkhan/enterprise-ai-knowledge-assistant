@@ -6,15 +6,14 @@ services:
     image: eaka-backend:local
     build:
       context: ../backend
+      args:
+        INSTALL_LLM: "true"
+    env_file:
+      - ../backend/.env
     environment:
       ENVIRONMENT: local
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/knowledge
       REDIS_URL: redis://redis:6379/0
-      DEFAULT_LLM_PROVIDER: mock
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_CHEAP_MODEL: ${OPENAI_CHEAP_MODEL:-gpt-4o-mini}
-      OPENAI_PREMIUM_MODEL: ${OPENAI_PREMIUM_MODEL:-gpt-4o}
-      OPENAI_FALLBACK_TO_MOCK: "true"
       DEFAULT_EMBEDDING_PROVIDER: mock
       EMBEDDING_MODEL: sentence-transformers/all-MiniLM-L6-v2
       EMBEDDING_DIMENSIONS: 384
@@ -35,16 +34,15 @@ services:
     image: eaka-backend:local
     build:
       context: ../backend
+      args:
+        INSTALL_LLM: "true"
+    env_file:
+      - ../backend/.env
     command: ["uv", "run", "python", "-m", "app.worker"]
     environment:
       ENVIRONMENT: local
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/knowledge
       REDIS_URL: redis://redis:6379/0
-      DEFAULT_LLM_PROVIDER: mock
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_CHEAP_MODEL: ${OPENAI_CHEAP_MODEL:-gpt-4o-mini}
-      OPENAI_PREMIUM_MODEL: ${OPENAI_PREMIUM_MODEL:-gpt-4o}
-      OPENAI_FALLBACK_TO_MOCK: "true"
       DEFAULT_EMBEDDING_PROVIDER: mock
       EMBEDDING_MODEL: sentence-transformers/all-MiniLM-L6-v2
       EMBEDDING_DIMENSIONS: 384

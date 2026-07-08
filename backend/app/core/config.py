@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     premium_model: str = "premium-reasoning-model"
     openai_cheap_model: str = "gpt-4o-mini"
     openai_premium_model: str = "gpt-4o"
+    openai_compatible_api_key: str | None = None
+    openai_compatible_base_url: str | None = None
+    openai_compatible_cheap_model: str = "gpt-4o-mini"
+    openai_compatible_premium_model: str = "gpt-4o"
     default_embedding_provider: str = "mock"
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_dimensions: int = 384

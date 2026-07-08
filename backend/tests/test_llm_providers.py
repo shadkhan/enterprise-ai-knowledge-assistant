@@ -1,4 +1,5 @@
 from app.llm.factory import get_llm_provider
+from app.llm.openai_compatible_provider import OpenAICompatibleProvider
 from app.llm.openai_mock_provider import MockOpenAIProvider
 from app.llm.openai_provider import OpenAIProvider
 from app.routing.model_router import model_router
@@ -36,6 +37,16 @@ def test_router_uses_openai_models_when_openai_mock_is_selected(monkeypatch) -> 
     assert route.model == "gpt-4o"
 
 
+def test_router_uses_openai_compatible_models(monkeypatch) -> None:
+    monkeypatch.setattr("app.core.config.settings.default_llm_provider", "openai_compatible")
+    monkeypatch.setattr("app.core.config.settings.openai_compatible_premium_model", "llama3.1:8b")
+
+    route = model_router.route("Summarize the security policy", preferred_quality="premium")
+
+    assert route.provider == "openai_compatible"
+    assert route.model == "llama3.1:8b"
+
+
 def test_factory_rejects_unknown_llm_provider() -> None:
     try:
         get_llm_provider("missing")
@@ -51,5 +62,20 @@ def test_openai_provider_falls_back_to_mock_without_api_key(monkeypatch) -> None
     monkeypatch.setattr("app.core.config.settings.openai_mock_latency_ms", 0)
 
     result = OpenAIProvider().generate_answer("When are security reviews required?", [_chunk()], "gpt-4o-mini")
+
+    assert "OpenAI-compatible mock answer" in result.answer
+
+
+def test_openai_compatible_provider_falls_back_to_mock_without_api_key(monkeypatch) -> None:
+    monkeypatch.setattr("app.core.config.settings.openai_compatible_api_key", None)
+    monkeypatch.setattr("app.core.config.settings.openai_api_key", None)
+    monkeypatch.setattr("app.core.config.settings.openai_fallback_to_mock", True)
+    monkeypatch.setattr("app.core.config.settings.openai_mock_latency_ms", 0)
+
+    result = OpenAICompatibleProvider().generate_answer(
+        "When are security reviews required?",
+        [_chunk()],
+        "llama3.2:3b",
+    )
 
     assert "OpenAI-compatible mock answer" in result.answer

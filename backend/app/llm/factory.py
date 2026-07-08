@@ -1,6 +1,7 @@
 from app.core.config import settings
 from app.llm.base import LLMProvider
 from app.llm.mock_provider import MockLLMProvider
+from app.llm.openai_compatible_provider import OpenAICompatibleProvider
 from app.llm.openai_mock_provider import MockOpenAIProvider
 from app.llm.openai_provider import OpenAIProvider
 
@@ -13,4 +14,6 @@ def get_llm_provider(provider_name: str | None = None) -> LLMProvider:
         return MockOpenAIProvider()
     if provider == "openai":
         return OpenAIProvider()
+    if provider == "openai_compatible":
+        return OpenAICompatibleProvider()
     raise ValueError(f"Unsupported LLM provider: {provider}")

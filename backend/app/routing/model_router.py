@@ -23,11 +23,15 @@ class ModelRouter:
     def _cheap_model(self, provider: str) -> str:
         if provider in {"openai", "openai_mock"}:
             return settings.openai_cheap_model
+        if provider == "openai_compatible":
+            return settings.openai_compatible_cheap_model
         return settings.cheap_model
 
     def _premium_model(self, provider: str) -> str:
         if provider in {"openai", "openai_mock"}:
             return settings.openai_premium_model
+        if provider == "openai_compatible":
+            return settings.openai_compatible_premium_model
         return settings.premium_model
 
 

@@ -207,8 +207,36 @@ uv run uvicorn app.main:app --reload
 | `mock` | No | Fast local demos and tests |
 | `openai_mock` | No | OpenAI-shaped integration testing |
 | `openai` | Yes | Real LLM answers with fallback support |
+| `openai_compatible` | Depends on provider | OpenAI-compatible Chat Completions endpoints, including local or free-tier model providers |
 
 By default, `OPENAI_FALLBACK_TO_MOCK=true`, so missing keys, missing SDK dependencies, or API failures fall back to the OpenAI-compatible mock provider.
+
+Docker reads `backend/.env` for backend and worker LLM settings. Use one of these modes:
+
+```env
+# Free deterministic local answers
+DEFAULT_LLM_PROVIDER=mock
+```
+
+```env
+# Real OpenAI Responses API
+DEFAULT_LLM_PROVIDER=openai
+OPENAI_API_KEY=your-api-key
+OPENAI_CHEAP_MODEL=gpt-4o-mini
+OPENAI_PREMIUM_MODEL=gpt-4o
+OPENAI_FALLBACK_TO_MOCK=true
+```
+
+```env
+# OpenAI-compatible Chat Completions provider, for example Ollama or LM Studio.
+# From Docker, host.docker.internal reaches services running on your host machine.
+DEFAULT_LLM_PROVIDER=openai_compatible
+OPENAI_COMPATIBLE_BASE_URL=http://host.docker.internal:11434/v1
+OPENAI_COMPATIBLE_API_KEY=ollama
+OPENAI_COMPATIBLE_CHEAP_MODEL=llama3.2:3b
+OPENAI_COMPATIBLE_PREMIUM_MODEL=llama3.1:8b
+OPENAI_FALLBACK_TO_MOCK=true
+```
 
 ## 9. Semantic Cache
 
