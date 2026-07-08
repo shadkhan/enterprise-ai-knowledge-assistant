@@ -64,6 +64,35 @@ class DocumentRepository:
                 )
             return pairs
 
+    def list_admin_documents(self) -> list[tuple[DocumentSummary, int]]:
+        with SessionLocal() as session:
+            records = session.scalars(
+                select(DocumentRecord)
+                .options(selectinload(DocumentRecord.chunks))
+                .order_by(DocumentRecord.created_at.desc())
+            ).all()
+            return [(self._to_summary(record), len(record.chunks)) for record in records]
+
+    def get_document_detail(self, document_id: str) -> tuple[DocumentSummary, list[DocumentChunk]] | None:
+        with SessionLocal() as session:
+            record = session.scalar(
+                select(DocumentRecord).options(selectinload(DocumentRecord.chunks)).where(DocumentRecord.id == document_id)
+            )
+            if not record:
+                return None
+            return (
+                self._to_summary(record),
+                [
+                    DocumentChunk(
+                        chunk_id=chunk.id,
+                        document_id=chunk.document_id,
+                        text=chunk.body,
+                        embedding=(chunk.metadata_json or {}).get("embedding"),
+                    )
+                    for chunk in record.chunks
+                ],
+            )
+
     def vector_search(self, query_embedding: list[float], user: User, top_k: int) -> list[RetrievedChunk]:
         if not is_postgres:
             return self._metadata_vector_search(query_embedding, user, top_k)

@@ -56,6 +56,19 @@ class IngestionJobQueue:
             return None
         return IngestionJobStatus.model_validate_json(raw)
 
+    def list_statuses(self, limit: int = 50) -> list[IngestionJobStatus]:
+        try:
+            statuses: list[IngestionJobStatus] = []
+            for index, key in enumerate(self.redis.scan_iter("ingestion_job:*")):
+                if index >= limit:
+                    break
+                raw = self.redis.get(key)
+                if raw:
+                    statuses.append(IngestionJobStatus.model_validate_json(raw))
+            return sorted(statuses, key=lambda item: item.updated_at, reverse=True)
+        except RedisError:
+            return []
+
     def mark_running(self, job_id: str) -> None:
         self._update(job_id, status="running")
 

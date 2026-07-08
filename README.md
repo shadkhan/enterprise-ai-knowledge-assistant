@@ -27,7 +27,7 @@ The current project is a runnable MVP plus part of the persistent RAG foundation
 | Ingestion jobs | Redis-backed queue with worker process and status API |
 | Embeddings | Mock provider by default; optional Hugging Face `sentence-transformers/all-MiniLM-L6-v2` provider |
 | Cache | Redis retrieval cache plus permission-aware semantic answer cache with ingestion-time invalidation |
-| Retrieval | Hybrid lexical + vector retrieval with pgvector on Postgres and metadata fallback on SQLite |
+| Retrieval | Hybrid lexical + vector retrieval with optional open-source BGE reranking |
 | LLM | Mock provider, OpenAI-compatible mock provider, and optional real OpenAI Responses API provider |
 | UI | Next.js chat UI plus admin pages for metrics, users, authentication, settings, and governance |
 | Observability | Structured logs plus persisted cost/evaluation records |
@@ -46,6 +46,7 @@ The current project is a runnable MVP plus part of the persistent RAG foundation
 | Mock embeddings | ✅ Done | Default fast provider for tests and lightweight demos |
 | Retrieval cache | ✅ Done | Redis-backed short-lived cache for repeated authorized searches |
 | Semantic answer cache | ✅ Done | Reuses safe similar answers by user/provider/model scope to reduce repeated LLM calls |
+| BGE reranking | ✅ Done | Optional `BAAI/bge-reranker-base` cross-encoder reranks hybrid candidates |
 | Document visibility | ✅ Done | Filters by mock user role, department, and clearance |
 | Mock authentication | ✅ Done | `X-User-Id` header resolves the active mock user |
 | Admin users API | ✅ Done | Lists five mock enterprise users for admin demos |
@@ -60,7 +61,7 @@ The current project is a runnable MVP plus part of the persistent RAG foundation
 
 | Area | Limitation | Planned Phase |
 | --- | --- | --- |
-| Retrieval | Hybrid retrieval exists, but reranking and quality evaluation are still basic | Phase 3 |
+| Retrieval | Hybrid retrieval and optional BGE reranking exist, but citation span scoring and evaluation are still basic | Phase 3 |
 | Embeddings | Hugging Face provider is optional; Docker defaults to mock unless embeddings group is installed | Phase 3 |
 | LLM | Mock and OpenAI-compatible paths work; real OpenAI provider is optional and env-driven | Phase 4 |
 | Streaming | UI animates text locally, but backend does not stream tokens yet | Phase 4 |
@@ -95,6 +96,7 @@ Persistence + Logs + Evaluation Hooks
 | Embeddings | Mock provider and optional Hugging Face sentence-transformers provider |
 | LLM providers | Mock, OpenAI-compatible mock, optional OpenAI SDK provider |
 | Vector search | pgvector on Postgres, metadata-vector fallback on SQLite |
+| Reranking | Optional `sentence-transformers` cross-encoder with `BAAI/bge-reranker-base` |
 | Python tooling | uv |
 | Frontend | Next.js, React, Tailwind CSS |
 | Node tooling | pnpm |
@@ -157,6 +159,27 @@ cd infra
 docker compose build --build-arg INSTALL_EMBEDDINGS=true backend worker
 docker compose up
 ```
+
+Enable open-source BGE reranking:
+
+```powershell
+cd backend
+uv --system-certs sync --group embeddings
+$env:RERANKING_ENABLED="true"
+$env:RERANKER_MODEL="BAAI/bge-reranker-base"
+uv run uvicorn app.main:app --reload
+```
+
+Why `BAAI/bge-reranker-base`:
+
+| Option | Strength | Tradeoff |
+| --- | --- | --- |
+| `BAAI/bge-reranker-base` | Strong open-source RAG reranking baseline | Heavier than vector scoring, but practical for demos |
+| `BAAI/bge-reranker-large` | Higher quality | Slower and more memory intensive |
+| `cross-encoder/ms-marco-MiniLM-L-6-v2` | Lightweight and fast | Usually weaker relevance than BGE |
+| Hosted rerank APIs | Strong managed quality | Paid/external provider dependency |
+
+The project uses BGE base as the recommended default because it is open source, realistic for enterprise RAG, and a good quality/performance middle ground.
 
 Enable the OpenAI-compatible mock provider:
 
@@ -249,6 +272,9 @@ Pass the selected user with the `X-User-Id` header. The frontend also includes a
 | Page | URL | Purpose |
 | --- | --- | --- |
 | Metrics | `http://localhost:3000/admin` | Request, token, and cost summary |
+| Documents | `http://localhost:3000/admin/documents` | Search/filter documents and inspect chunks |
+| Ingestion | `http://localhost:3000/admin/ingestion` | Create manual text or synthetic ingestion jobs |
+| Jobs | `http://localhost:3000/admin/jobs` | Monitor queued/running/completed/failed ingestion jobs |
 | Users | `http://localhost:3000/admin/users` | Five mock users with roles, departments, clearance, and status |
 | Authentication | `http://localhost:3000/admin/authentication` | Mock SSO mode, login header, session, MFA, and planned providers |
 | Settings | `http://localhost:3000/admin/settings` | Runtime provider, cache, retrieval, and fallback settings |
@@ -329,7 +355,7 @@ curl http://localhost:8000/ingest/jobs/{job_id} \
 | Phase 4 | LLM Providers And Streaming | 🟡 Started | Add real model providers and streamed responses |
 | Phase 5 | Enterprise Security And Governance | ⏳ Planned | Add SSO, ABAC, ACL sync, DLP, and audit logging |
 | Phase 6 | Observability, Evaluation, And Cost Controls | ⏳ Planned | Add traces, quality gates, budgets, feedback, and dashboards |
-| Phase 7 | Admin And Knowledge Operations UI | ⏳ Planned | Add document management, ingestion monitoring, and operator workflows |
+| Phase 7 | Admin And Knowledge Operations UI | 🟡 Started | Add document management, ingestion monitoring, and operator workflows |
 | Phase 8 | Multi-Agent Workflows | ⏳ Planned | Add governed multi-step research and enterprise actions |
 
 ## 📦 Phase Modules
@@ -409,7 +435,8 @@ curl http://localhost:8000/ingest/jobs/{job_id} \
 | --- | --- | --- |
 | Hybrid lexical + semantic retrieval | ✅ Done | Weighted lexical + vector ranking |
 | pgvector similarity search | ✅ Done | Semantic search foundation for Postgres |
-| Reranking interface | ⏳ Planned | Improve final context precision |
+| Reranking interface | ✅ Done | Optional reranker abstraction with fallback |
+| BGE reranker provider | ✅ Done | `BAAI/bge-reranker-base` through `sentence-transformers` |
 | Context assembly service | ⏳ Planned | Centralize context packing |
 | Context compression | ⏳ Planned | Reduce token cost |
 | Semantic answer cache | ✅ Done | Permission-aware cache for repeated/similar questions |
@@ -452,6 +479,10 @@ curl http://localhost:8000/ingest/jobs/{job_id} \
 
 | Module | Status | Notes |
 | --- | --- | --- |
+| Phase 6A in-repo evaluation | ⏳ Planned | Golden questions, pytest eval runner, retrieval/citation/access checks |
+| Phase 6A admin quality dashboard | ⏳ Planned | `/admin/evaluations` for scores, risk, and notes |
+| Phase 6B user feedback | ⏳ Planned | Thumbs up/down, comments, and review queue |
+| Phase 6B runtime metrics | ⏳ Planned | Cache hits, reranker status, latency, job counts, and model cost |
 | OpenTelemetry traces | ⏳ Planned | End-to-end request visibility |
 | Request/retrieval/LLM/evaluation spans | ⏳ Planned | Debug latency and failures |
 | Metrics dashboard data model | ⏳ Planned | Persist dashboard-ready aggregates |
@@ -462,18 +493,30 @@ curl http://localhost:8000/ingest/jobs/{job_id} \
 | Department budgets | ⏳ Planned | Cost governance |
 | Rate limits and quotas | ⏳ Planned | Abuse and spend control |
 
+### Phase 6 Plan: What, Why, How, Result
+
+| Area | What | Why | How | Result |
+| --- | --- | --- | --- | --- |
+| Offline evaluation | Golden datasets and repeatable eval tests | Catch retrieval and answer regressions before release | Add `data/evaluation/golden_questions.json`, pytest eval runner, expected document checks, and leakage tests | Safer changes and measurable retrieval quality |
+| Online evaluation | Score real answers after generation | Detect hallucination, weak citations, and low-confidence answers in use | Store groundedness, citation, uncertainty, and evaluator notes per response | Admins can find quality problems quickly |
+| Monitoring | Runtime metrics for cost, latency, cache, reranking, and jobs | Keep production behavior visible and debuggable | Add `/metrics/runtime`, OpenTelemetry-ready spans, cache hit counters, reranker fallback counters, and ingestion job counts | Faster incident diagnosis and cost control |
+| User feedback | Capture thumbs up/down and comments | Human feedback finds issues automated checks miss | Add chat feedback actions, `/feedback`, and `/admin/feedback` review page | Feedback loop for routing, prompts, retrieval, and content fixes |
+
+We do not just build RAG. We measure retrieval quality, answer groundedness, citations, access-control leakage, latency, cost, and user feedback.
+
 ### Phase 7: Admin And Knowledge Operations UI
 
 | Module | Status | Notes |
 | --- | --- | --- |
-| Document upload screen | ⏳ Planned | Operator ingestion UX |
-| Document browser | ⏳ Planned | Search/filter managed documents |
+| Manual text ingestion screen | ✅ Done | Operator UX for creating async text ingestion jobs |
+| Synthetic ingestion screen | ✅ Done | Operator UX for generating synthetic document, PDF-like, data, JSON, and text jobs |
+| Document browser | ✅ Done | Search/filter managed documents and inspect chunks |
 | Connector status page | ⏳ Planned | Monitor external source sync |
-| Ingestion job monitor | ⏳ Planned | Track failures and retries |
-| Cost dashboard | ⏳ Planned | Spend by model/user/department |
+| Ingestion job monitor | ✅ Done | Track queued, running, completed, and failed jobs |
+| Cost dashboard | ✅ Done | Spend by model/user/department |
 | Evaluation dashboard | ⏳ Planned | Quality and hallucination monitoring |
 | Feedback review queue | ⏳ Planned | Human review workflow |
-| User and role demo switcher | ⏳ Planned | Better demo/admin controls |
+| User and role demo switcher | ✅ Done | Five mock users available in the chat UI |
 
 ### Phase 8: Multi-Agent Workflows
 
@@ -506,7 +549,7 @@ Important constraint: agents must reuse shared auth, retrieval, logging, cost, a
 | Mock LLM default | The default provider is still mock so the app runs without API keys | Set `DEFAULT_LLM_PROVIDER=openai` and `OPENAI_API_KEY` |
 | Mock embeddings | Default embeddings are deterministic demo vectors unless Hugging Face provider is enabled | Enable `DEFAULT_EMBEDDING_PROVIDER=huggingface` |
 | Semantic cache | Cache only hits for same user scope, provider, model, and high embedding similarity | Tune threshold and TTL for production |
-| Retrieval quality | Hybrid retrieval exists, but reranking and citation precision are still basic | Phase 3 reranking and retrieval evaluation |
+| Retrieval quality | Hybrid retrieval and optional BGE reranking exist, but citation precision and evaluation are still basic | Phase 3 citation and retrieval evaluation |
 | Local typewriter animation | Text animates in the UI after the full API response arrives | Phase 4 streamed backend responses |
 | Mock RBAC | Access rules are demo-only and not tied to enterprise identity | Phase 5 SSO/JWT/ABAC |
 | Placeholder guardrails | Prompt-injection and PII checks are simple pattern checks | Phase 5 DLP and classifier integration |

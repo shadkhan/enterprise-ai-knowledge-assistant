@@ -4,7 +4,11 @@ from app.core.config import settings
 from app.embeddings import get_embedding_provider
 from app.ingestion.service import ingestion_service
 from app.repositories.documents import document_repository
+from app.reranking import get_reranker
+from app.observability.logging import get_logger
 from app.schemas.retrieval import RetrievedChunk
+
+logger = get_logger(__name__)
 
 
 class RetrievalService:
@@ -13,21 +17,57 @@ class RetrievalService:
         if cached is not None:
             return cached
 
-        lexical_results = self._lexical_search(query, user, top_k=top_k * 2)
+        candidate_limit = self._candidate_limit(top_k)
+        lexical_results = self._lexical_search(query, user, top_k=candidate_limit)
         vector_results: list[RetrievedChunk] = []
         if settings.retrieval_mode in {"vector", "hybrid"}:
             query_embedding = get_embedding_provider().embed_texts([query])[0]
-            vector_results = document_repository.vector_search(query_embedding, user, top_k=top_k * 2)
+            vector_results = document_repository.vector_search(query_embedding, user, top_k=candidate_limit)
 
         if settings.retrieval_mode == "vector":
-            ranked = vector_results[:top_k]
+            candidates = vector_results[:candidate_limit]
         elif settings.retrieval_mode == "hybrid":
-            ranked = self._hybrid_rank(lexical_results, vector_results, top_k)
+            candidates = self._hybrid_rank(lexical_results, vector_results, candidate_limit)
         else:
-            ranked = lexical_results[:top_k]
+            candidates = lexical_results[:candidate_limit]
+
+        ranked = self._rerank(query, candidates, top_k)
 
         retrieval_cache.set(query, user, top_k, ranked)
         return ranked
+
+    def _candidate_limit(self, top_k: int) -> int:
+        if not settings.reranking_enabled:
+            return top_k * 2
+        return max(top_k, top_k * settings.reranker_candidate_multiplier)
+
+    def _rerank(self, query: str, candidates: list[RetrievedChunk], top_k: int) -> list[RetrievedChunk]:
+        if not settings.reranking_enabled or not candidates:
+            return candidates[:top_k]
+
+        top_n = min(max(settings.reranker_top_n, top_k), len(candidates))
+        try:
+            reranked = get_reranker().rerank(query, candidates, top_n=top_n)
+            logger.info(
+                "retrieval_reranked",
+                extra={
+                    "reranker_provider": settings.reranker_provider,
+                    "reranker_model": settings.reranker_model,
+                    "candidate_count": len(candidates),
+                    "returned_count": min(top_k, len(reranked)),
+                },
+            )
+            return reranked[:top_k]
+        except Exception as exc:
+            logger.warning(
+                "retrieval_rerank_failed",
+                extra={
+                    "reranker_provider": settings.reranker_provider,
+                    "reranker_model": settings.reranker_model,
+                    "error": str(exc),
+                },
+            )
+            return candidates[:top_k]
 
     def _lexical_search(self, query: str, user: User, top_k: int) -> list[RetrievedChunk]:
         query_terms = {term.lower().strip(".,!?") for term in query.split() if len(term) > 2}

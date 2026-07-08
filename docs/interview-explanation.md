@@ -14,7 +14,9 @@ The backend is a FastAPI service organized by architectural responsibility. The 
 
 The ingestion module accepts documents, extracts metadata, converts payloads into LlamaIndex `Document` objects, chunks text with LangChain's recursive splitter, and can generate embeddings for each chunk. It supports a deterministic mock provider by default and an optional local Hugging Face provider using `sentence-transformers/all-MiniLM-L6-v2`. It supports both synchronous ingestion and Redis-backed async ingestion jobs processed by a worker. Today it stores parsed document and chunk records through SQLAlchemy and also has a synthetic content endpoint for document, PDF-like, data, JSON, and text demo material. PostgreSQL mode stores 384-dimensional vectors in pgvector, while SQLite mode keeps a metadata fallback for local development.
 
-Retrieval is security-sensitive. The skeleton filters documents by user role, department, and clearance before ranking. In production I would enforce authorization both at metadata query time and again before context assembly. The current retrieval path is hybrid: lexical search for exact identifiers and policy names plus vector search for semantic recall. The next quality layer would be reranking, citation span scoring, and retrieval evaluation datasets.
+Retrieval is security-sensitive. The skeleton filters documents by user role, department, and clearance before ranking. In production I would enforce authorization both at metadata query time and again before context assembly. The current retrieval path is hybrid: lexical search for exact identifiers and policy names plus vector search for semantic recall. The next quality layers are reranking, citation span scoring, and retrieval evaluation datasets.
+
+For reranking, I chose `BAAI/bge-reranker-base` as the recommended open-source default. BGE base is a strong RAG reranking baseline, works through `sentence-transformers`, and is a better quality/performance fit for this project than `bge-reranker-large`, which is heavier, or `cross-encoder/ms-marco-MiniLM-L-6-v2`, which is faster but usually weaker. The system retrieves a larger hybrid candidate pool, reranks `(question, chunk)` pairs with BGE, and falls back to the original hybrid order if the reranker is unavailable.
 
 The LLM layer is provider-agnostic. The code defines an interface and currently ships with a deterministic mock provider, an OpenAI-compatible mock provider, and an optional real OpenAI provider using the Responses API. That separation allows routing across OpenAI, Anthropic, Azure-hosted models, or local models without rewriting the orchestration layer. For cost control, the chat flow now also includes a permission-aware semantic answer cache that can reuse high-confidence similar answers before making another LLM call.
 
@@ -22,11 +24,20 @@ Model routing starts rules-based. Short, simple questions go to a cheap fast mod
 
 Security includes prompt-injection checks and PII redaction placeholders. A production system would add DLP integration, source trust ranking, output policy checks, secrets detection, and full audit logging.
 
-The admin surface now includes users, authentication, runtime settings, and governance pages. Today those pages are read-only and backed by mock data/configuration, but they demonstrate the control-plane shape for real SSO, policy management, budget controls, and audit workflows.
+The admin surface now includes users, authentication, runtime settings, governance, document inventory, ingestion, and job monitoring pages. Today some controls are read-only and backed by mock data/configuration, but they demonstrate the control-plane shape for real SSO, policy management, budget controls, ingestion operations, and audit workflows.
 
 Evaluation is intentionally pluggable. The current hook performs simple citation checks. A real system would run golden datasets, LLM-as-judge scoring, groundedness checks, citation precision, and regression tests in CI and production monitoring.
 
 Observability and cost tracking are first-class. Every chat response returns model, provider, latency, tokens, and estimated cost. Logs are structured JSON so they can be shipped to Splunk, Datadog, ELK, or OpenTelemetry.
+
+The next evaluation and monitoring phase is a quality control plane. We do not just build RAG. We measure retrieval quality, answer groundedness, citations, access-control leakage, latency, cost, and user feedback.
+
+| Area | What | Why | How | Result |
+| --- | --- | --- | --- | --- |
+| Offline evaluation | Golden datasets and repeatable tests | Prevent regressions before release | Use golden questions, expected source documents, citation checks, and authorization leakage tests in pytest | CI can block unsafe retrieval or answer changes |
+| Online evaluation | Score real generated answers | Catch hallucination and weak grounding in real usage | Persist groundedness, citation precision, uncertainty, and evaluator notes | Admins can triage risky answers |
+| Monitoring | Track runtime health and cost | Diagnose failures and prevent runaway spend | Add runtime metrics for latency, cache hits, reranker fallback, job counts, provider/model cost, and OpenTelemetry-ready spans | Platform teams can operate the assistant responsibly |
+| User feedback | Capture human judgment | Automated metrics miss business nuance | Add thumbs up/down, comments, `/feedback`, and admin review queues | Feedback improves prompts, retrieval, routing, and content quality |
 
 The architecture is also ready for multi-agent workflows because core capabilities are modular: auth, retrieval, LLM providers, evaluation, cost, and logging are separate services. Agents can be added as orchestration layers without bypassing governance.
 
@@ -47,6 +58,8 @@ Track source version, updated timestamp, deletion status, and connector sync cur
 ### How do you measure answer quality?
 
 Use offline golden datasets, groundedness checks, citation precision, answer completeness, human feedback, and production monitoring by question category.
+
+In this project I would implement that in two phases. Phase 6A adds an in-repo golden dataset, a pytest evaluation runner, expected-document checks, citation checks, and access-control leakage tests. Phase 6B adds user feedback, an admin feedback review queue, runtime metrics, and monitoring dashboards. Later, tools like RAGAS, DeepEval, promptfoo, Langfuse, Arize Phoenix, OpenTelemetry, Prometheus, or Grafana can be plugged in without changing the core RAG flow.
 
 ### What happens if retrieval finds nothing?
 

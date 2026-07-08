@@ -41,3 +41,37 @@ def test_admin_settings_and_governance() -> None:
     assert settings_response.json()["retrieval_mode"] in {"lexical", "vector", "hybrid"}
     assert governance_response.status_code == 200
     assert governance_response.json()["policies"]
+
+
+def test_admin_documents_and_detail() -> None:
+    ingest_response = client.post(
+        "/ingest",
+        headers={"X-User-Id": "u-admin"},
+        json={
+            "title": "Admin Document Test",
+            "text": "This document should be visible in admin knowledge operations.",
+            "source_type": "manual",
+            "department": "Global",
+            "classification": "internal",
+            "tags": ["admin-test"],
+        },
+    )
+    assert ingest_response.status_code == 200
+    document_id = ingest_response.json()[0]["document_id"]
+
+    list_response = client.get("/admin/documents", headers={"X-User-Id": "u-admin"})
+    detail_response = client.get(f"/admin/documents/{document_id}", headers={"X-User-Id": "u-admin"})
+
+    assert list_response.status_code == 200
+    assert any(item["document_id"] == document_id for item in list_response.json())
+    assert detail_response.status_code == 200
+    assert detail_response.json()["document"]["chunk_count"] >= 1
+
+
+def test_admin_ingestion_jobs_endpoint_is_admin_only() -> None:
+    forbidden = client.get("/admin/ingest/jobs", headers={"X-User-Id": "u-employee"})
+    allowed = client.get("/admin/ingest/jobs", headers={"X-User-Id": "u-admin"})
+
+    assert forbidden.status_code == 403
+    assert allowed.status_code == 200
+    assert isinstance(allowed.json(), list)

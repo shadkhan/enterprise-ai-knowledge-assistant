@@ -27,6 +27,11 @@ class AdminSettings(BaseModel):
     default_llm_provider: str
     default_embedding_provider: str
     retrieval_mode: str
+    reranking_enabled: bool
+    reranker_provider: str
+    reranker_model: str
+    reranker_top_n: int
+    reranker_candidate_multiplier: int
     semantic_cache_enabled: bool
     semantic_cache_ttl_seconds: int
     semantic_cache_similarity_threshold: float
@@ -50,3 +55,20 @@ class GovernanceSummary(BaseModel):
     audit_events_retention_days: int
     data_classifications: list[str]
     approval_required_for: list[str]
+
+
+class AdminDocumentSummary(BaseModel):
+    document_id: str
+    title: str
+    source_type: str
+    department: str
+    classification: str
+    tags: list[str]
+    owner_id: str
+    chunk_count: int
+    metadata: dict
+
+
+class AdminDocumentDetail(BaseModel):
+    document: AdminDocumentSummary
+    chunks: list[dict]

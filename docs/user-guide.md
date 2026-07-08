@@ -139,7 +139,37 @@ docker compose build --build-arg INSTALL_EMBEDDINGS=true backend worker
 docker compose up
 ```
 
-## 7. Optional OpenAI Providers
+## 7. Optional BGE Reranking
+
+Reranking improves citation/context quality by taking a larger hybrid retrieval candidate pool and scoring each `(question, chunk)` pair with an open-source cross-encoder.
+
+Recommended model:
+
+```text
+BAAI/bge-reranker-base
+```
+
+Enable it locally:
+
+```powershell
+cd backend
+uv --system-certs sync --group embeddings
+$env:RERANKING_ENABLED="true"
+$env:RERANKER_MODEL="BAAI/bge-reranker-base"
+uv run uvicorn app.main:app --reload
+```
+
+Comparison:
+
+| Reranker | Best For | Tradeoff |
+| --- | --- | --- |
+| `BAAI/bge-reranker-base` | Recommended open-source default | Balanced quality and local cost |
+| `BAAI/bge-reranker-large` | Higher quality experiments | Slower and heavier |
+| `cross-encoder/ms-marco-MiniLM-L-6-v2` | Very small local demos | Lower quality |
+
+If reranking fails to load, the API falls back to the current hybrid retrieval order.
+
+## 8. Optional OpenAI Providers
 
 The default LLM provider is `mock`, which keeps the project free and deterministic.
 
@@ -171,7 +201,7 @@ uv run uvicorn app.main:app --reload
 
 By default, `OPENAI_FALLBACK_TO_MOCK=true`, so missing keys, missing SDK dependencies, or API failures fall back to the OpenAI-compatible mock provider.
 
-## 8. Semantic Cache
+## 9. Semantic Cache
 
 Semantic cache is enabled by default. It stores completed chat answers in Redis using the question embedding and a strict permission-aware scope.
 
@@ -188,7 +218,7 @@ When semantic cache hits, `/chat` returns `semantic_cache_hit=true`, zero curren
 
 Ingestion clears both retrieval cache and semantic answer cache so new or changed documents can be discovered.
 
-## 9. Test The Application In The UI
+## 10. Test The Application In The UI
 
 1. Open the frontend.
 2. Select a user from the user selector.
@@ -218,13 +248,16 @@ Recommended users:
 | `u-finance` | Finance restricted-access demo |
 | `u-legal` | Legal restricted-access demo |
 
-## 10. Test Admin Pages
+## 11. Test Admin Pages
 
 Start the frontend and backend, then open:
 
 | Page | URL |
 | --- | --- |
 | Metrics | `http://localhost:3000/admin` |
+| Documents | `http://localhost:3000/admin/documents` |
+| Ingestion | `http://localhost:3000/admin/ingestion` |
+| Jobs | `http://localhost:3000/admin/jobs` |
 | Users | `http://localhost:3000/admin/users` |
 | Authentication | `http://localhost:3000/admin/authentication` |
 | Settings | `http://localhost:3000/admin/settings` |
@@ -232,7 +265,14 @@ Start the frontend and backend, then open:
 
 The admin pages call backend APIs as `u-admin`. The current authentication model is mock header authentication through `X-User-Id`; real SSO/OIDC/SAML is planned for a later phase.
 
-## 11. Test The Backend APIs
+Recommended admin flow:
+
+1. Open `/admin/ingestion` and create a text or synthetic ingestion job.
+2. Open `/admin/jobs` and wait for the job to complete.
+3. Open `/admin/documents` and inspect the new document chunks.
+4. Ask a question in the chat UI and verify citations.
+
+## 12. Test The Backend APIs
 
 Health check:
 
@@ -310,7 +350,21 @@ curl http://localhost:8000/admin/governance `
   -H "X-User-Id: u-admin"
 ```
 
-## 12. Run Automated Checks
+List admin documents:
+
+```powershell
+curl http://localhost:8000/admin/documents `
+  -H "X-User-Id: u-admin"
+```
+
+List ingestion jobs:
+
+```powershell
+curl http://localhost:8000/admin/ingest/jobs `
+  -H "X-User-Id: u-admin"
+```
+
+## 13. Run Automated Checks
 
 Backend tests:
 
@@ -347,7 +401,27 @@ cd infra
 docker compose config --quiet
 ```
 
-## 13. Troubleshooting
+## 14. Evaluation, Testing, And Monitoring Plan
+
+We do not just build RAG. We measure retrieval quality, answer groundedness, citations, access-control leakage, latency, cost, and user feedback.
+
+| Area | What | Why | How | Result |
+| --- | --- | --- | --- | --- |
+| Offline evaluation | Golden questions and repeatable eval tests | Catch regressions before release | Add golden JSON cases and pytest checks for expected documents, citations, and authorization leakage | Safer releases |
+| Online evaluation | Score generated answers | Detect weak grounding and hallucination risk | Persist evaluator scores, notes, citation checks, and uncertainty signals | Admin quality dashboard |
+| Monitoring | Runtime health and cost metrics | Understand latency, failures, cache behavior, and spend | Add `/metrics/runtime`, cache/reranker/job counters, and OpenTelemetry-ready spans | Better operations |
+| User feedback | Thumbs up/down and comments | Capture human quality signal | Add feedback API and admin review queue | Better prompts, retrieval, routing, and content |
+
+Recommended future tools:
+
+| Category | Good Options |
+| --- | --- |
+| Offline RAG evals | pytest, RAGAS, DeepEval, promptfoo |
+| LLM traces and feedback | Langfuse |
+| Open-source RAG observability | Arize Phoenix |
+| Infra/app monitoring | OpenTelemetry, Prometheus, Grafana, Datadog |
+
+## 15. Troubleshooting
 
 | Problem | Likely Cause | Fix |
 | --- | --- | --- |
@@ -357,12 +431,13 @@ docker compose config --quiet
 | Port `8000` is busy | Another backend is running | Stop the old process or change the backend port |
 | Docker push fails with large `.pnpm-store` files | Local package store was accidentally committed | Remove `.pnpm-store` from git history and keep it ignored |
 | Hugging Face run is slow first time | Model download and dependency loading | Wait for first model download to complete |
+| BGE reranking is slow first time | Model download and cross-encoder loading | Wait for the first model load or disable with `RERANKING_ENABLED=false` |
 | OpenAI provider returns mock-style answer | Fallback is enabled, API key is missing, or SDK is not installed | Run `uv --system-certs sync --group llm` and set `OPENAI_API_KEY` |
 | `http://localhost:11434` does not open | That is an Ollama API port, not this project's web preview | Ignore it unless you separately install and run Ollama; this project uses `3000/3001` for frontend and `8000` for backend |
 | Semantic cache does not hit | Redis is not running, cache is cold, or similarity is below threshold | Ask the same or very similar question twice with the same user/model route |
 | Redis job stays queued | Worker is not running | Use Docker full stack or start `python -m app.worker` with backend environment |
 
-## 14. What Is Mocked Today
+## 16. What Is Mocked Today
 
 | Area | Current Behavior |
 | --- | --- |
@@ -375,4 +450,4 @@ docker compose config --quiet
 | Admin settings | Read-only mock settings and governance pages |
 | Evaluation | Basic placeholder scoring |
 
-This means the project is suitable for architecture demos, API testing, ingestion flow testing, retrieval flow testing, and frontend walkthroughs. Production-grade SSO, real model calls, real file parsers, reranking, streaming, and stronger governance are planned phases.
+This means the project is suitable for architecture demos, API testing, ingestion flow testing, retrieval flow testing, and frontend walkthroughs. Production-grade SSO, real model calls, real file parsers, reranking analytics, streaming, and stronger governance are planned phases.

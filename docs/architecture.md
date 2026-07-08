@@ -33,7 +33,9 @@ The ingestion foundation now uses LangChain and LlamaIndex:
 
 The demo uses five mock enterprise users resolved from the `X-User-Id` header. Each user has email, roles, department, clearance, status, auth provider, and last-login metadata.
 
-Admin-only endpoints expose users, authentication settings, runtime settings, and governance policy summaries. These endpoints are read-only today, but they establish the API shape for future SSO, ABAC, audit, and policy administration.
+Admin-only endpoints expose users, authentication settings, runtime settings, governance policy summaries, document inventory, document detail, and ingestion job status. These endpoints establish the API shape for future SSO, ABAC, audit, policy administration, and knowledge operations.
+
+The knowledge operations UI adds document inventory, chunk inspection, ingestion job creation, synthetic content generation, and job monitoring. This gives admins a closed loop from adding knowledge to validating retrieval behavior.
 
 ### API
 
@@ -47,6 +49,9 @@ FastAPI exposes:
 - `GET /ingest/jobs/{job_id}`: inspect ingestion job status
 - `GET /documents`: visible documents for current user
 - `GET /auth/me`: current mock user profile
+- `GET /admin/documents`: admin-only document inventory with chunk counts
+- `GET /admin/documents/{document_id}`: admin-only document detail and chunks
+- `GET /admin/ingest/jobs`: admin-only ingestion job monitor
 - `GET /admin/users`: admin-only mock user directory
 - `GET /admin/authentication`: admin-only authentication configuration
 - `GET /admin/settings`: admin-only runtime settings summary
@@ -116,9 +121,30 @@ The intended production design continues to evolve toward higher-quality hybrid 
 - metadata filter by tenant, department, ACL, classification, freshness, and source
 - lexical search for exact policy names, IDs, ticket keys, and acronyms
 - vector search for semantic recall through pgvector
-- reranking for final context ordering
+- optional BGE reranking for final context ordering
 
 The most important production rule is security-first retrieval: filter unauthorized documents before they can reach the model context.
+
+### Reranking
+
+Reranking is optional and disabled by default for lightweight local runs. When enabled, retrieval first gathers a larger candidate pool from lexical/vector search, then an open-source cross-encoder scores `(question, chunk)` pairs and returns the best chunks to the LLM.
+
+Recommended default:
+
+```text
+BAAI/bge-reranker-base
+```
+
+Decision reasoning:
+
+| Reranker | Why Use It | Tradeoff |
+| --- | --- | --- |
+| `BAAI/bge-reranker-base` | Strong open-source RAG baseline and practical local default | More CPU/RAM than vector-only retrieval |
+| `BAAI/bge-reranker-large` | Better quality ceiling | Slower, larger, less friendly for small machines |
+| `cross-encoder/ms-marco-MiniLM-L-6-v2` | Very fast local baseline | Weaker relevance quality for enterprise RAG |
+| Hosted rerank APIs | Managed, strong quality | Paid and external |
+
+The code uses a reranker abstraction so BGE can be swapped later. If the reranker model or dependency is unavailable, retrieval falls back to the existing hybrid order.
 
 Current caching behavior:
 
@@ -185,6 +211,17 @@ The evaluator currently checks citation presence and uncertainty language. Produ
 - hallucination detection
 - regression gates in CI
 - online feedback loops
+
+The next planned evaluation layer is a control plane with four parts:
+
+| Layer | What | Why | How | Result |
+| --- | --- | --- | --- | --- |
+| Offline evaluation | Golden question datasets and repeatable tests | Catch retrieval, citation, and access-control regressions before release | Store golden cases in the repo and run them through pytest | Quality gates become part of CI |
+| Online evaluation | Score real answers after generation | Detect hallucination and weak citations in live usage | Persist groundedness, citation, uncertainty, and evaluator notes | Admins can review risky answers |
+| Monitoring | Track latency, cost, cache, reranker, and ingestion behavior | Make production behavior observable | Add runtime metrics and OpenTelemetry-ready spans | Faster debugging and cost governance |
+| User feedback | Capture thumbs up/down and comments | Add human judgment to automated checks | Store feedback and expose an admin review queue | Better prompts, retrieval tuning, and content fixes |
+
+We do not just build RAG. We measure retrieval quality, answer groundedness, citations, access-control leakage, latency, cost, and user feedback.
 
 ### Cost and observability
 

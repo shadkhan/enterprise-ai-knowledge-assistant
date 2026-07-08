@@ -3,10 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { BarChart3, KeyRound, Settings, ShieldCheck, UsersRound } from "lucide-react";
+import { BarChart3, Database, FilePlus2, KeyRound, ListChecks, Settings, ShieldCheck, UsersRound } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Overview", icon: BarChart3 },
+  { href: "/admin/documents", label: "Documents", icon: Database },
+  { href: "/admin/ingestion", label: "Ingestion", icon: FilePlus2 },
+  { href: "/admin/jobs", label: "Jobs", icon: ListChecks },
   { href: "/admin/users", label: "Users", icon: UsersRound },
   { href: "/admin/authentication", label: "Authentication", icon: KeyRound },
   { href: "/admin/settings", label: "Settings", icon: Settings },

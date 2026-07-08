@@ -46,6 +46,51 @@ export type DocumentSummary = {
   metadata: Record<string, unknown>;
 };
 
+export type AdminDocumentSummary = DocumentSummary & {
+  chunk_count: number;
+};
+
+export type AdminDocumentDetail = {
+  document: AdminDocumentSummary;
+  chunks: Array<{
+    chunk_id: string;
+    document_id: string;
+    text: string;
+    has_embedding: boolean;
+    embedding_dimensions: number;
+  }>;
+};
+
+export type DocumentCreate = {
+  title: string;
+  text: string;
+  source_type: string;
+  department: string;
+  classification: "public" | "internal" | "restricted";
+  tags: string[];
+};
+
+export type SyntheticContentRequest = {
+  content_type: "document" | "pdf" | "data" | "json" | "text";
+  topic: string;
+  department: string;
+  classification: "public" | "internal" | "restricted";
+  count: number;
+  tags: string[];
+};
+
+export type IngestionJobStatus = {
+  job_id: string;
+  status: string;
+  job_type: string;
+  owner_id: string;
+  created_at: string;
+  updated_at: string;
+  document_count: number;
+  error?: string | null;
+  result_document_ids: string[];
+};
+
 export type AuthenticationSettings = {
   mode: string;
   active_provider: string;
@@ -60,6 +105,11 @@ export type AdminSettings = {
   default_llm_provider: string;
   default_embedding_provider: string;
   retrieval_mode: string;
+  reranking_enabled: boolean;
+  reranker_provider: string;
+  reranker_model: string;
+  reranker_top_n: number;
+  reranker_candidate_multiplier: number;
   semantic_cache_enabled: boolean;
   semantic_cache_ttl_seconds: number;
   semantic_cache_similarity_threshold: number;
@@ -198,6 +248,70 @@ export async function getGovernanceSummary(): Promise<GovernanceSummary> {
 
   if (!response.ok) {
     throw new Error(`Governance request failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function getAdminDocuments(): Promise<AdminDocumentSummary[]> {
+  const response = await fetch(`${API_BASE_URL}/admin/documents`, {
+    headers: { "X-User-Id": "u-admin" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Admin documents request failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function getAdminDocumentDetail(documentId: string): Promise<AdminDocumentDetail> {
+  const response = await fetch(`${API_BASE_URL}/admin/documents/${documentId}`, {
+    headers: { "X-User-Id": "u-admin" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Admin document detail request failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function createIngestionJob(document: DocumentCreate): Promise<IngestionJobStatus> {
+  const response = await fetch(`${API_BASE_URL}/ingest/jobs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-User-Id": "u-admin" },
+    body: JSON.stringify({ document, generate_embeddings: true }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Ingestion job request failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function createSyntheticJob(synthetic: SyntheticContentRequest): Promise<IngestionJobStatus> {
+  const response = await fetch(`${API_BASE_URL}/synthetic/jobs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-User-Id": "u-admin" },
+    body: JSON.stringify({ synthetic, generate_embeddings: true }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Synthetic job request failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function getAdminIngestionJobs(): Promise<IngestionJobStatus[]> {
+  const response = await fetch(`${API_BASE_URL}/admin/ingest/jobs`, {
+    headers: { "X-User-Id": "u-admin" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Ingestion jobs request failed: ${await parseError(response)}`);
   }
 
   return response.json();

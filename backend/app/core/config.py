@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     retrieval_mode: str = "hybrid"
     lexical_weight: float = 0.35
     vector_weight: float = 0.65
+    reranking_enabled: bool = False
+    reranker_provider: str = "sentence_transformers"
+    reranker_model: str = "BAAI/bge-reranker-base"
+    reranker_top_n: int = 5
+    reranker_candidate_multiplier: int = 4
     ingestion_queue_name: str = "ingestion_jobs"
     ingestion_job_ttl_seconds: int = 86400
     retrieval_cache_ttl_seconds: int = 300

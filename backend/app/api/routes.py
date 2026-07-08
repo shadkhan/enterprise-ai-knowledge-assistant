@@ -14,10 +14,19 @@ from app.ingestion.service import ingestion_service
 from app.llm.factory import get_llm_provider
 from app.observability.logging import get_logger
 from app.repositories.costs import cost_repository
+from app.repositories.documents import document_repository
 from app.repositories.evaluations import evaluation_repository
 from app.retrieval.service import retrieval_service
 from app.routing.model_router import model_router
-from app.schemas.admin import AdminSettings, AuthenticationSettings, GovernancePolicy, GovernanceSummary, UserProfile
+from app.schemas.admin import (
+    AdminDocumentDetail,
+    AdminDocumentSummary,
+    AdminSettings,
+    AuthenticationSettings,
+    GovernancePolicy,
+    GovernanceSummary,
+    UserProfile,
+)
 from app.schemas.chat import ChatRequest, ChatResponse, Citation
 from app.schemas.documents import (
     DocumentCreate,
@@ -76,6 +85,37 @@ def admin_users(_: User = Depends(require_admin)) -> list[UserProfile]:
     return [_to_user_profile(user) for user in MOCK_USERS.values()]
 
 
+@router.get("/admin/documents", response_model=list[AdminDocumentSummary])
+def admin_documents(_: User = Depends(require_admin)) -> list[AdminDocumentSummary]:
+    return [_to_admin_document(summary, chunk_count) for summary, chunk_count in document_repository.list_admin_documents()]
+
+
+@router.get("/admin/documents/{document_id}", response_model=AdminDocumentDetail)
+def admin_document_detail(document_id: str, _: User = Depends(require_admin)) -> AdminDocumentDetail:
+    detail = document_repository.get_document_detail(document_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Document not found")
+    summary, chunks = detail
+    return AdminDocumentDetail(
+        document=_to_admin_document(summary, len(chunks)),
+        chunks=[
+            {
+                "chunk_id": chunk.chunk_id,
+                "document_id": chunk.document_id,
+                "text": chunk.text,
+                "has_embedding": bool(chunk.embedding),
+                "embedding_dimensions": len(chunk.embedding or []),
+            }
+            for chunk in chunks
+        ],
+    )
+
+
+@router.get("/admin/ingest/jobs", response_model=list[IngestionJobStatus])
+def admin_ingestion_jobs(_: User = Depends(require_admin)) -> list[IngestionJobStatus]:
+    return ingestion_job_queue.list_statuses()
+
+
 @router.get("/admin/authentication", response_model=AuthenticationSettings)
 def admin_authentication(_: User = Depends(require_admin)) -> AuthenticationSettings:
     return AuthenticationSettings(
@@ -95,6 +135,11 @@ def admin_settings(_: User = Depends(require_admin)) -> AdminSettings:
         default_llm_provider=settings.default_llm_provider,
         default_embedding_provider=settings.default_embedding_provider,
         retrieval_mode=settings.retrieval_mode,
+        reranking_enabled=settings.reranking_enabled,
+        reranker_provider=settings.reranker_provider,
+        reranker_model=settings.reranker_model,
+        reranker_top_n=settings.reranker_top_n,
+        reranker_candidate_multiplier=settings.reranker_candidate_multiplier,
         semantic_cache_enabled=settings.semantic_cache_enabled,
         semantic_cache_ttl_seconds=settings.semantic_cache_ttl_seconds,
         semantic_cache_similarity_threshold=settings.semantic_cache_similarity_threshold,
@@ -342,6 +387,20 @@ def _semantic_cache_embedding(query: str) -> list[float] | None:
         return get_embedding_provider().embed_texts([query])[0]
     except Exception:
         return None
+
+
+def _to_admin_document(summary: DocumentSummary, chunk_count: int) -> AdminDocumentSummary:
+    return AdminDocumentSummary(
+        document_id=summary.document_id,
+        title=summary.title,
+        source_type=summary.source_type,
+        department=summary.department,
+        classification=summary.classification,
+        tags=summary.tags,
+        owner_id=summary.owner_id,
+        chunk_count=chunk_count,
+        metadata=summary.metadata,
+    )
 
 
 @router.get("/metrics/cost")
