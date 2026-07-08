@@ -146,7 +146,10 @@ def admin_evaluations(_: User = Depends(require_admin)) -> list[EvaluationRecord
 
 @router.post("/admin/evaluations/run", response_model=GoldenEvaluationRunResponse)
 def run_admin_evaluations(_: User = Depends(require_admin)) -> GoldenEvaluationRunResponse:
-    return golden_evaluation_runner.run()
+    try:
+        return golden_evaluation_runner.run()
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/admin/feedback", response_model=list[FeedbackRecordSummary])

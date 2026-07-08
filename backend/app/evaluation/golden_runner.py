@@ -34,6 +34,8 @@ class GoldenEvaluationRunner:
         )
 
     def load_cases(self) -> list[GoldenEvaluationCase]:
+        if not self.dataset_path.exists():
+            raise FileNotFoundError(f"Golden evaluation dataset not found: {self.dataset_path}")
         with self.dataset_path.open("r", encoding="utf-8") as file:
             raw_cases = json.load(file)
         return [GoldenEvaluationCase.model_validate(item) for item in raw_cases]

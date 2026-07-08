@@ -46,6 +46,90 @@ The next evaluation and monitoring phase is a quality control plane. We do not j
 
 The architecture is also ready for multi-agent workflows because core capabilities are modular: auth, retrieval, LLM providers, evaluation, cost, and logging are separate services. Agents can be added as orchestration layers without bypassing governance.
 
+## How to explain the whiteboard diagrams
+
+Use the diagrams in `docs/whiteboard.md` as a left-to-right story. The goal is to show that this is not just a chatbot UI; it is a governed enterprise RAG platform with ingestion, retrieval, identity, evaluation, observability, and future agent extensibility.
+
+### Product Architecture diagram
+
+Start with the employee or admin on the left and walk toward the data stores on the right.
+
+Say: "The user interacts with a Next.js chat and admin console. The frontend calls a FastAPI layer. The API is responsible for identity, guardrails, retrieval, model routing, telemetry, and admin operations. Retrieval is permission-aware and uses Redis for caching plus PostgreSQL/pgvector for document chunks and embeddings. The model router can call mock providers for local demos, OpenAI, or OpenAI-compatible local models. The answer returns with citations, cost, latency, model metadata, and prompt version."
+
+The key point is separation of concerns. UI, API orchestration, retrieval, model providers, storage, and governance are separate modules so each can evolve independently.
+
+### Chat Request Flow diagram
+
+Explain this as the main runtime path.
+
+Say: "A user asks a question. The UI sends `POST /chat` with the user and conversation id. The backend resolves the user, applies guardrails, retrieves only authorized chunks, and sends those chunks to the LLM provider. The response is saved with citations, cost, model, prompt version, and token usage. The UI can then request citation previews separately."
+
+Emphasize the security rule: documents are filtered before they enter the model context. The LLM never receives unauthorized chunks.
+
+### Module Roadmap diagram
+
+Use this to show what is complete versus future-facing.
+
+Say: "The implemented foundation includes RAG chat, prompt governance, provider abstraction, async ingestion jobs, conversation history, citation preview, admin monitoring, feedback, and golden evaluations. The next layer is more production depth: streaming responses, stronger file parsing, richer evaluation dashboards, and runtime admin controls. The enterprise layer adds connectors, SSO, audit logging, DLP, and policy engines."
+
+This diagram helps an interviewer see that the skeleton has production-shaped seams even where integrations are currently mocked.
+
+### User and UI diagram
+
+Use this to separate user workflows from admin workflows.
+
+Say: "Employees and managers primarily use the chat assistant to get cited answers and inspect source previews. Admins and knowledge owners use both the assistant and the admin console. The admin console owns knowledge operations: document inventory, ingestion jobs, prompt versions, monitoring, users, authentication settings, governance, evaluations, and feedback."
+
+The point is that the product is both an assistant and an operational control plane.
+
+### API Layer diagram
+
+Use this to explain the backend boundary.
+
+Say: "In production, the UI would sit behind an API gateway and enterprise SSO. This skeleton uses mock RBAC so it is easy to run locally, but the route shape already maps to production concerns: chat, ingestion, documents, evaluations, metrics, and admin governance. Shared services such as RBAC, guardrails, repositories, and structured logs sit underneath the routes."
+
+Mention that this keeps business logic out of frontend components and makes the backend testable.
+
+### Request Path for Chat diagram
+
+Use this when asked how you prevent hallucination or data leakage.
+
+Say: "The request path is deliberately ordered. First we resolve identity. Then we inspect and sanitize the question. Then we route the model. Then we filter documents by permission before retrieval context is assembled. Only authorized chunks are passed into the active prompt. The LLM generates an answer, and we persist telemetry, citations, and conversation history."
+
+The important phrase is: "authorization happens before context assembly, not after generation."
+
+### Knowledge Ingestion Path diagram
+
+Use this to explain how documents become searchable.
+
+Say: "Knowledge can enter through admin upload, synthetic demo data, or folder ingestion today. Future connectors include SharePoint, Confluence, Jira, Drive, PDFs, DOCX, and OCR. Async ingestion creates a Redis job and queue message. A worker normalizes content into a LlamaIndex document, extracts metadata, chunks text with LangChain, generates embeddings, and persists documents, chunks, and vectors."
+
+The production principle is that ingestion is asynchronous, resumable, observable, and isolated by document and stage. One bad file should not block the whole pipeline.
+
+### Storage diagram
+
+Use this to explain why PostgreSQL, pgvector, and Redis are all present.
+
+Say: "PostgreSQL stores durable records: documents, chunks, conversations, costs, evaluations, feedback, prompts, and future audit events. pgvector stores embeddings beside chunk metadata, so permissions and vectors remain in one relational store. Redis handles ephemeral operational state: retrieval cache, semantic answer cache, ingestion queue, job status, and future rate limits."
+
+This is a pragmatic MVP default: fewer systems than a dedicated vector DB, but still production-shaped.
+
+### Observability and Governance diagram
+
+Use this to show enterprise readiness.
+
+Say: "Governance is cross-cutting. RBAC, guardrails, prompt versions, policies, and audit logs control the runtime path. Observability receives events from every major step: logs, metrics, traces, evaluation records, and feedback. Evaluations and feedback loop back into prompt and retrieval tuning."
+
+The message is: "We do not just generate answers; we measure and govern answer behavior."
+
+### Future Agents diagram
+
+Use this only after explaining the single-agent RAG foundation.
+
+Say: "Agents are an orchestration layer above the governed services, not a bypass around them. A planner can decompose work, a retriever agent can call retrieval, a policy agent can check access and compliance, an evaluator can review groundedness, and an action agent can update tickets or workflows. But all of them reuse shared auth, guardrails, retrieval, LLM, cost, and audit services."
+
+This keeps multi-agent workflows controllable. The core security and observability model remains centralized.
+
 ## Common interviewer follow-up questions
 
 ### How do you prevent unauthorized data leakage?
