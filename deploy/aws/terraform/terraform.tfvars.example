@@ -1,0 +1,42 @@
+aws_region  = "us-east-1"
+environment = "dev"
+name_prefix = "eaka"
+
+tags = {
+  App         = "enterprise-ai-knowledge-assistant"
+  Environment = "dev"
+  ManagedBy   = "terraform"
+}
+
+vpc_cidr                = "10.40.0.0/16"
+availability_zone_count = 2
+enable_nat_gateway      = true
+
+# Build and push these images after bootstrapping ECR.
+backend_image  = "123456789012.dkr.ecr.us-east-1.amazonaws.com/eaka-dev-backend:dev"
+frontend_image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/eaka-dev-frontend:dev"
+worker_image   = "123456789012.dkr.ecr.us-east-1.amazonaws.com/eaka-dev-backend:dev"
+
+frontend_api_base_url = ""
+
+db_name     = "knowledge"
+db_user     = "app_user"
+db_password = "replace-with-a-strong-password"
+
+db_instance_class       = "db.t4g.micro"
+db_allocated_storage_gb = 50
+db_multi_az             = false
+db_deletion_protection  = false
+
+redis_node_type          = "cache.t4g.micro"
+redis_num_cache_clusters = 1
+
+default_llm_provider       = "mock"
+default_embedding_provider = "mock"
+
+backend_desired_count  = 1
+frontend_desired_count = 1
+worker_desired_count   = 1
+
+log_retention_days    = 14
+alb_http_cidr_blocks = ["0.0.0.0/0"]
