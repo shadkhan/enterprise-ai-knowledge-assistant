@@ -259,6 +259,7 @@ Start the frontend and backend, then open:
 | Ingestion | `http://localhost:3000/admin/ingestion` |
 | Jobs | `http://localhost:3000/admin/jobs` |
 | Evaluations | `http://localhost:3000/admin/evaluations` |
+| Prompts | `http://localhost:3000/admin/prompts` |
 | Feedback | `http://localhost:3000/admin/feedback` |
 | Monitoring | `http://localhost:3000/admin/monitoring` |
 | Users | `http://localhost:3000/admin/users` |
@@ -275,8 +276,9 @@ Recommended admin flow:
 3. Open `/admin/documents` and inspect the new document chunks.
 4. Ask a question in the chat UI and verify citations.
 5. Open `/admin/evaluations` and run golden evaluations.
-6. Submit thumbs up/down feedback in chat.
-7. Open `/admin/feedback` and `/admin/monitoring` to review quality and runtime signals.
+6. Open `/admin/prompts`, preview the active chat prompt, and create a draft version.
+7. Submit thumbs up/down feedback in chat.
+8. Open `/admin/feedback` and `/admin/monitoring` to review quality and runtime signals.
 
 ## 12. Test The Backend APIs
 
@@ -384,6 +386,22 @@ curl http://localhost:8000/metrics/runtime `
   -H "X-User-Id: u-admin"
 ```
 
+List prompt templates:
+
+```powershell
+curl http://localhost:8000/admin/prompts `
+  -H "X-User-Id: u-admin"
+```
+
+Preview the active chat prompt:
+
+```powershell
+curl -X POST http://localhost:8000/admin/prompts/preview `
+  -H "Content-Type: application/json" `
+  -H "X-User-Id: u-admin" `
+  -d "{\"key\":\"rag_chat_system\",\"question\":\"How many days can employees work remotely?\",\"contexts\":[\"Employees may work remotely two days per week.\"]}"
+```
+
 ## 13. Run Automated Checks
 
 Backend tests:
@@ -396,7 +414,7 @@ uv --system-certs run pytest
 Expected result:
 
 ```text
-6 passed
+23 passed
 ```
 
 Frontend type check:
@@ -431,6 +449,7 @@ We do not just build RAG. We measure retrieval quality, answer groundedness, cit
 | Online evaluation | Score generated answers | Detect weak grounding and hallucination risk | Persist evaluator scores, notes, citation checks, and uncertainty signals | Admin quality dashboard |
 | Monitoring | Runtime health and cost metrics | Understand latency, failures, cache behavior, and spend | Add `/metrics/runtime`, cache/reranker/job counters, and OpenTelemetry-ready spans | Better operations |
 | User feedback | Thumbs up/down and comments | Capture human quality signal | Add feedback API and admin review queue | Better prompts, retrieval, routing, and content |
+| Prompt governance | Versioned system/eval/retrieval prompts | Make prompt changes traceable | Add prompt templates, preview, activation, archiving, and chat prompt metadata | Safer prompt iteration |
 
 Recommended future tools:
 
@@ -469,5 +488,6 @@ Recommended future tools:
 | Identity | Mock users and RBAC, not real SSO |
 | Admin settings | Read-only mock settings and governance pages |
 | Evaluation | Basic placeholder scoring |
+| Prompt governance | Prompt versions persist and can be activated, but approval workflow/audit events are planned |
 
 This means the project is suitable for architecture demos, API testing, ingestion flow testing, retrieval flow testing, and frontend walkthroughs. Production-grade SSO, real model calls, real file parsers, reranking analytics, streaming, and stronger governance are planned phases.

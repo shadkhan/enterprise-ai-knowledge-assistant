@@ -18,7 +18,7 @@ The current project is a runnable MVP plus part of the persistent RAG foundation
 
 | Area | Current State |
 | --- | --- |
-| Backend API | FastAPI service with chat, ingestion, documents, health, metrics, evaluation, auth, and admin endpoints |
+| Backend API | FastAPI service with chat, ingestion, documents, health, metrics, evaluation, feedback, prompt library, auth, and admin endpoints |
 | Identity | Five mock users with email, role, department, clearance, status, auth provider, and last login fields |
 | Authorization | Permission-aware document filtering before retrieval context assembly |
 | Storage | SQLAlchemy repositories with SQLite for backend-only local mode and PostgreSQL for Docker mode |
@@ -29,8 +29,9 @@ The current project is a runnable MVP plus part of the persistent RAG foundation
 | Cache | Redis retrieval cache plus permission-aware semantic answer cache with ingestion-time invalidation |
 | Retrieval | Hybrid lexical + vector retrieval with optional open-source BGE reranking |
 | LLM | Mock provider, OpenAI-compatible mock provider, and optional real OpenAI Responses API provider |
-| UI | Next.js chat UI plus admin pages for metrics, users, authentication, settings, and governance |
-| Observability | Structured logs plus persisted cost/evaluation records |
+| Prompt governance | Versioned prompt library for system, retrieval, evaluation, summarization, and guardrail prompts |
+| UI | Next.js chat UI plus admin pages for metrics, prompts, users, authentication, settings, and governance |
+| Observability | Structured logs plus persisted cost, evaluation, feedback, and prompt-version trace records |
 | Package Managers | `uv` for Python, `pnpm` for Node/Next.js |
 | Infra | Docker Compose with backend, frontend, PostgreSQL + pgvector, and Redis |
 
@@ -51,9 +52,10 @@ The current project is a runnable MVP plus part of the persistent RAG foundation
 | Mock authentication | ✅ Done | `X-User-Id` header resolves the active mock user |
 | Admin users API | ✅ Done | Lists five mock enterprise users for admin demos |
 | Admin governance API | ✅ Done | Shows current/planned policy controls and enforcement notes |
-| Persistence | ✅ Done | Documents, chunks, costs, and evaluations persist |
+| Prompt library | ✅ Done | Versioned governed prompts, activation, archiving, preview, and chat prompt traceability |
+| Persistence | ✅ Done | Documents, chunks, costs, evaluations, feedback, and prompts persist |
 | Demo seed data | ✅ Done | Seeds a `Remote Work Policy` document when DB is empty |
-| Admin console | ✅ Done | Metrics, users, authentication, settings, and governance pages |
+| Admin console | ✅ Done | Metrics, prompts, users, authentication, settings, and governance pages |
 | Chat UI | ✅ Done | Professional chat workspace with response animation |
 | Local CORS | ✅ Done | Allows local frontend ports such as `3000`, `3001`, etc. |
 
@@ -67,7 +69,7 @@ The current project is a runnable MVP plus part of the persistent RAG foundation
 | Streaming | UI animates text locally, but backend does not stream tokens yet | Phase 4 |
 | Ingestion | No real file upload, parsing, OCR, or connector sync yet | Phase 2 |
 | Security | Mock RBAC only; no SSO, ABAC, DLP, or enterprise audit trail yet | Phase 5 |
-| Evaluation | Placeholder evaluator, no golden datasets or groundedness checks yet | Phase 6 |
+| Evaluation | Golden regression checks exist, but groundedness scoring is still basic | Phase 6 |
 
 ## 🧱 Architecture At A Glance
 
@@ -89,7 +91,7 @@ Persistence + Logs + Evaluation Hooks
 
 ### Keywords
 
-FastAPI, Pydantic, SQLAlchemy, SQLite, PostgreSQL, pgvector, Redis, LangChain, LlamaIndex, Hugging Face, sentence-transformers, BAAI/bge-reranker-base, OpenAI Responses API, RAG, hybrid retrieval, semantic cache, retrieval cache, cross-encoder reranking, golden evaluations, RBAC, mock SSO, structured JSON logging, Next.js, React, Tailwind CSS, lucide-react, TypeScript, pnpm, uv, Docker Compose, pytest.
+FastAPI, Pydantic, SQLAlchemy, SQLite, PostgreSQL, pgvector, Redis, LangChain, LlamaIndex, Hugging Face, sentence-transformers, BAAI/bge-reranker-base, OpenAI Responses API, RAG, hybrid retrieval, semantic cache, retrieval cache, cross-encoder reranking, prompt library, prompt versioning, prompt governance, golden evaluations, user feedback, runtime monitoring, RBAC, mock SSO, structured JSON logging, Next.js, React, Tailwind CSS, lucide-react, TypeScript, pnpm, uv, Docker Compose, pytest.
 
 | Layer | Technology |
 | --- | --- |
@@ -279,6 +281,10 @@ Pass the selected user with the `X-User-Id` header. The frontend also includes a
 | Documents | `http://localhost:3000/admin/documents` | Search/filter documents and inspect chunks |
 | Ingestion | `http://localhost:3000/admin/ingestion` | Create manual text or synthetic ingestion jobs |
 | Jobs | `http://localhost:3000/admin/jobs` | Monitor queued/running/completed/failed ingestion jobs |
+| Evaluations | `http://localhost:3000/admin/evaluations` | Run golden evaluations and inspect quality records |
+| Prompts | `http://localhost:3000/admin/prompts` | Manage versioned system, retrieval, evaluation, summarization, and guardrail prompts |
+| Feedback | `http://localhost:3000/admin/feedback` | Review thumbs up/down answer feedback |
+| Monitoring | `http://localhost:3000/admin/monitoring` | Runtime summary for docs, jobs, feedback, evals, costs, and feature flags |
 | Users | `http://localhost:3000/admin/users` | Five mock users with roles, departments, clearance, and status |
 | Authentication | `http://localhost:3000/admin/authentication` | Mock SSO mode, login header, session, MFA, and planned providers |
 | Settings | `http://localhost:3000/admin/settings` | Runtime provider, cache, retrieval, and fallback settings |
@@ -487,6 +493,7 @@ curl http://localhost:8000/ingest/jobs/{job_id} \
 | Phase 6A admin quality dashboard | ✅ Done | `/admin/evaluations` for scores, risk, and notes |
 | Phase 6B user feedback | ✅ Done | Thumbs up/down, persisted records, and admin review queue |
 | Phase 6B runtime metrics | ✅ Done | Runtime endpoint and monitoring page for cost, jobs, docs, evals, feedback, and feature flags |
+| Phase 6C prompt library | ✅ Done | Versioned prompt templates, admin UI, preview, activate/archive workflow, and chat prompt traceability |
 | OpenTelemetry traces | ⏳ Planned | End-to-end request visibility |
 | Request/retrieval/LLM/evaluation spans | ⏳ Planned | Debug latency and failures |
 | Metrics dashboard data model | ⏳ Planned | Persist dashboard-ready aggregates |
@@ -505,6 +512,7 @@ curl http://localhost:8000/ingest/jobs/{job_id} \
 | Online evaluation | Score real answers after generation | Detect hallucination, weak citations, and low-confidence answers in use | Store groundedness, citation, uncertainty, and evaluator notes per response | Admins can find quality problems quickly |
 | Monitoring | Runtime metrics for cost, docs, evals, feedback, feature flags, and jobs | Keep production behavior visible and debuggable | Add `/metrics/runtime` and `/admin/monitoring` | Faster incident diagnosis and cost control |
 | User feedback | Capture thumbs up/down and comments | Human feedback finds issues automated checks miss | Add chat feedback actions, `/feedback`, and `/admin/feedback` review page | Feedback loop for routing, prompts, retrieval, and content fixes |
+| Prompt governance | Manage prompts as versioned operational assets | Prompt changes affect safety, cost, quality, and supportability | Add `prompt_templates`, `/admin/prompts`, active-version selection, preview, and chat prompt metadata | Admins can tune behavior without code edits and trace answers to prompt versions |
 
 We do not just build RAG. We measure retrieval quality, answer groundedness, citations, access-control leakage, latency, cost, and user feedback.
 
@@ -519,7 +527,8 @@ We do not just build RAG. We measure retrieval quality, answer groundedness, cit
 | Ingestion job monitor | ✅ Done | Track queued, running, completed, and failed jobs |
 | Cost dashboard | ✅ Done | Spend by model/user/department |
 | Evaluation dashboard | ✅ Done | Run golden evals and review persisted evaluation records |
-| Feedback review queue | ⏳ Planned | Human review workflow |
+| Feedback review queue | ✅ Done | Human review workflow |
+| Prompt library console | ✅ Done | Prompt versioning, preview, activation, and archiving |
 | User and role demo switcher | ✅ Done | Five mock users available in the chat UI |
 
 ### Phase 8: Multi-Agent Workflows
@@ -557,7 +566,7 @@ Important constraint: agents must reuse shared auth, retrieval, logging, cost, a
 | Local typewriter animation | Text animates in the UI after the full API response arrives | Phase 4 streamed backend responses |
 | Mock RBAC | Access rules are demo-only and not tied to enterprise identity | Phase 5 SSO/JWT/ABAC |
 | Placeholder guardrails | Prompt-injection and PII checks are simple pattern checks | Phase 5 DLP and classifier integration |
-| Placeholder evaluation | Quality scoring is not dataset-backed | Phase 6 golden datasets and groundedness scoring |
+| Basic evaluation | Golden datasets exist, but scoring still needs stronger groundedness/citation precision | Phase 6 groundedness scoring |
 
 ## 📚 Documentation
 

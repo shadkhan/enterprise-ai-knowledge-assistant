@@ -128,3 +128,53 @@ def test_feedback_and_runtime_metrics() -> None:
     assert runtime_response.status_code == 200
     assert runtime_response.json()["feedback"]["total"] >= 1
     assert forbidden_runtime.status_code == 403
+
+
+def test_prompt_library_admin_flow_and_chat_traceability() -> None:
+    list_response = client.get("/admin/prompts", headers={"X-User-Id": "u-admin"})
+    forbidden_response = client.get("/admin/prompts", headers={"X-User-Id": "u-employee"})
+
+    assert list_response.status_code == 200
+    assert forbidden_response.status_code == 403
+    assert any(prompt["key"] == "rag_chat_system" for prompt in list_response.json())
+
+    create_response = client.post(
+        "/admin/prompts",
+        headers={"X-User-Id": "u-admin"},
+        json={
+            "key": "rag_chat_system",
+            "name": "RAG Chat System Prompt",
+            "prompt_type": "system",
+            "status": "draft",
+            "owner": "AI Platform",
+            "description": "Test prompt version.",
+            "content": "You are a governed enterprise assistant. Use only authorized context and cite source ids.",
+            "metadata": {"runtime": "chat"},
+        },
+    )
+    assert create_response.status_code == 200
+    created = create_response.json()
+    assert created["version"] >= 2
+    assert created["status"] == "draft"
+
+    activate_response = client.post(f"/admin/prompts/{created['id']}/activate", headers={"X-User-Id": "u-admin"})
+    preview_response = client.post(
+        "/admin/prompts/preview",
+        headers={"X-User-Id": "u-admin"},
+        json={"key": "rag_chat_system", "question": "What is the remote work policy?", "contexts": ["Employees may work remotely."]},
+    )
+
+    assert activate_response.status_code == 200
+    assert activate_response.json()["status"] == "active"
+    assert preview_response.status_code == 200
+    assert preview_response.json()["version"] == created["version"]
+
+    chat_response = client.post(
+        "/chat",
+        headers={"X-User-Id": "u-employee"},
+        json={"question": "How many days can employees work remotely?"},
+    )
+    assert chat_response.status_code == 200
+    body = chat_response.json()
+    assert body["prompt_key"] == "rag_chat_system"
+    assert body["prompt_version"] == created["version"]

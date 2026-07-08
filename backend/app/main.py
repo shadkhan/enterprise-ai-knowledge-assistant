@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.db import init_db
 from app.ingestion.service import ingestion_service
 from app.observability.logging import configure_logging
+from app.repositories.prompts import prompt_repository
 from app.schemas.documents import DocumentCreate
 
 
@@ -21,6 +22,7 @@ async def lifespan(app: FastAPI):
     for attempt in range(30):
         try:
             init_db()
+            prompt_repository.ensure_seeded()
             break
         except OperationalError:
             if attempt == 29:

@@ -4,7 +4,7 @@
 
 The Enterprise AI Knowledge Assistant lets employees ask natural-language questions over internal knowledge while preserving access controls, citations, observability, cost control, and future extensibility.
 
-This repository is a reference skeleton. It uses mock providers so the architecture is easy to inspect and run, while documents, chunks, costs, and evaluations are stored through a SQLAlchemy repository layer. Backend-only development uses SQLite by default; the `infra/` folder shows the PostgreSQL with pgvector, Redis, and containerized full-stack path.
+This repository is a reference skeleton. It uses mock providers so the architecture is easy to inspect and run, while documents, chunks, costs, evaluations, feedback, and prompt templates are stored through a SQLAlchemy repository layer. Backend-only development uses SQLite by default; the `infra/` folder shows the PostgreSQL with pgvector, Redis, and containerized full-stack path.
 
 The ingestion foundation now uses LangChain and LlamaIndex:
 
@@ -22,10 +22,11 @@ The ingestion foundation now uses LangChain and LlamaIndex:
 3. Security guardrails inspect the prompt for injection patterns and redact obvious PII.
 4. The model router selects a cheap or premium model based on query complexity and requested quality.
 5. Retrieval searches authorized document chunks only.
-6. The LLM provider generates an answer from retrieved context. The provider can be the default mock, an OpenAI-compatible mock, or the real OpenAI Responses API provider.
-7. The response includes citations, token usage, latency, model/provider, and estimated cost.
-8. Structured JSON logs emit observability-friendly events.
-9. Evaluation hooks can score the answer after generation.
+6. The active chat prompt version is selected from the prompt library.
+7. The LLM provider generates an answer from retrieved context. The provider can be the default mock, an OpenAI-compatible mock, or the real OpenAI Responses API provider.
+8. The response includes citations, token usage, latency, model/provider, prompt key/version, and estimated cost.
+9. Structured JSON logs emit observability-friendly events.
+10. Evaluation hooks can score the answer after generation.
 
 ## Components
 
@@ -52,6 +53,14 @@ FastAPI exposes:
 - `GET /admin/documents`: admin-only document inventory with chunk counts
 - `GET /admin/documents/{document_id}`: admin-only document detail and chunks
 - `GET /admin/ingest/jobs`: admin-only ingestion job monitor
+- `GET /admin/evaluations`: admin-only persisted evaluation records
+- `POST /admin/evaluations/run`: run in-repo golden evaluations
+- `GET /admin/feedback`: admin-only human feedback review queue
+- `GET /admin/prompts`: admin-only prompt library
+- `POST /admin/prompts`: create a new prompt version
+- `POST /admin/prompts/{prompt_id}/activate`: activate a prompt version and clear semantic cache
+- `POST /admin/prompts/{prompt_id}/archive`: archive a prompt version and clear semantic cache
+- `POST /admin/prompts/preview`: preview the active prompt message shape
 - `GET /admin/users`: admin-only mock user directory
 - `GET /admin/authentication`: admin-only authentication configuration
 - `GET /admin/settings`: admin-only runtime settings summary
@@ -159,7 +168,7 @@ The chat endpoint also has a Redis-backed semantic answer cache. After authoriza
 
 | Cache Dimension | Current Behavior |
 | --- | --- |
-| Scope | User ID, roles, department, clearance, provider, model, and `top_k` |
+| Scope | User ID, roles, department, clearance, provider, model, active prompt version, and `top_k` |
 | Similarity | Cosine similarity over the configured embedding provider |
 | TTL | Controlled by `SEMANTIC_CACHE_TTL_SECONDS` |
 | Invalidation | Cleared after document ingestion |
@@ -180,6 +189,21 @@ The `llm` package defines a provider interface plus three current implementation
 The model router selects provider-specific cheap and premium model names from configuration. The real OpenAI provider uses retrieved authorized context as input and can fall back to `openai_mock` when the API key, SDK, network, or provider call is unavailable.
 
 Production providers should support retries, timeouts, streaming, tool calls, structured output, safety settings, and tracing metadata.
+
+### Prompt library
+
+Prompts are managed as versioned governance records instead of hardcoded strings. The `prompt_templates` table stores stable keys, prompt type, version, status, content, owner, creator, and metadata.
+
+| Field | Purpose |
+| --- | --- |
+| `key` | Stable runtime lookup such as `rag_chat_system` or `groundedness_eval` |
+| `prompt_type` | `system`, `retrieval`, `evaluation`, `summarization`, or `guardrail` |
+| `version` | Version number per prompt key |
+| `status` | `draft`, `active`, or `archived` |
+| `content` | Prompt body used by runtime or preview workflows |
+| `metadata` | Runtime, risk, owner, or governance labels |
+
+The admin Prompt Library page supports listing prompts, creating new versions, previewing message shape, activating versions, and archiving versions. Chat responses include `prompt_key` and `prompt_version`, and the semantic cache scope includes the active prompt version so changed prompts do not reuse old cached answers.
 
 ### Model routing
 
@@ -220,6 +244,7 @@ The next planned evaluation layer is a control plane with four parts:
 | Online evaluation | Score real answers after generation | Detect hallucination and weak citations in live usage | Persist groundedness, citation, uncertainty, and evaluator notes | Admins can review risky answers |
 | Monitoring | Track cost, documents, evaluations, feedback, feature flags, and ingestion behavior | Make production behavior observable | `/metrics/runtime` and `/admin/monitoring` | Faster debugging and cost governance |
 | User feedback | Capture thumbs up/down and comments | Add human judgment to automated checks | Store feedback and expose `/admin/feedback` | Better prompts, retrieval tuning, and content fixes |
+| Prompt governance | Version and review runtime prompts | Make behavior changes traceable and reversible | `/admin/prompts`, active prompt lookup, preview, prompt metadata on answers | Safer prompt iteration without code edits |
 
 We do not just build RAG. We measure retrieval quality, answer groundedness, citations, access-control leakage, latency, cost, and user feedback.
 
@@ -231,7 +256,7 @@ Production telemetry should also include trace IDs, retrieval timings, reranker 
 
 ## Data stores
 
-PostgreSQL stores document metadata, chunks, audit logs, costs, and evaluations. pgvector stores embeddings beside chunk metadata. Redis supports caching, rate limiting, distributed locks, and queue infrastructure.
+PostgreSQL stores document metadata, chunks, audit logs, costs, evaluations, feedback, and prompt templates. pgvector stores embeddings beside chunk metadata. Redis supports caching, rate limiting, distributed locks, and queue infrastructure.
 
 Current storage behavior:
 

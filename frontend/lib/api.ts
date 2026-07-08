@@ -25,6 +25,8 @@ export type ChatResponse = {
   }>;
   model: string;
   provider: string;
+  prompt_key: string;
+  prompt_version: number;
   latency_ms: number;
   prompt_tokens: number;
   completion_tokens: number;
@@ -196,6 +198,40 @@ export type RuntimeMetrics = {
   feedback: { total: number; positive: number; negative: number; positive_rate: number };
   ingestion_jobs: { retained: number; by_status: Record<string, number> };
   features: Record<string, unknown>;
+};
+
+export type PromptTemplateSummary = {
+  id: number;
+  key: string;
+  name: string;
+  prompt_type: "system" | "retrieval" | "evaluation" | "summarization" | "guardrail";
+  version: number;
+  status: "draft" | "active" | "archived";
+  content: string;
+  description?: string | null;
+  owner: string;
+  created_by: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PromptTemplateCreate = {
+  key: string;
+  name: string;
+  prompt_type: PromptTemplateSummary["prompt_type"];
+  content: string;
+  description?: string;
+  owner: string;
+  status: PromptTemplateSummary["status"];
+  metadata: Record<string, unknown>;
+};
+
+export type PromptPreviewResponse = {
+  key: string;
+  version: number;
+  status: string;
+  messages: Array<{ role: string; content: string }>;
 };
 
 async function parseError(response: Response): Promise<string> {
@@ -440,6 +476,76 @@ export async function getRuntimeMetrics(): Promise<RuntimeMetrics> {
 
   if (!response.ok) {
     throw new Error(`Runtime metrics request failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function getAdminPrompts(): Promise<PromptTemplateSummary[]> {
+  const response = await fetch(`${API_BASE_URL}/admin/prompts`, {
+    headers: { "X-User-Id": "u-admin" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Prompt library request failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function createPromptVersion(payload: PromptTemplateCreate): Promise<PromptTemplateSummary> {
+  const response = await fetch(`${API_BASE_URL}/admin/prompts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-User-Id": "u-admin" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Prompt create request failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function activatePrompt(promptId: number): Promise<PromptTemplateSummary> {
+  const response = await fetch(`${API_BASE_URL}/admin/prompts/${promptId}/activate`, {
+    method: "POST",
+    headers: { "X-User-Id": "u-admin" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Prompt activation failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function archivePrompt(promptId: number): Promise<PromptTemplateSummary> {
+  const response = await fetch(`${API_BASE_URL}/admin/prompts/${promptId}/archive`, {
+    method: "POST",
+    headers: { "X-User-Id": "u-admin" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Prompt archive failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function previewPrompt(key: string): Promise<PromptPreviewResponse> {
+  const response = await fetch(`${API_BASE_URL}/admin/prompts/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-User-Id": "u-admin" },
+    body: JSON.stringify({
+      key,
+      question: "How many days can employees work remotely?",
+      contexts: ["Remote Work Policy: Employees may work remotely two days per week with manager approval."],
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Prompt preview failed: ${await parseError(response)}`);
   }
 
   return response.json();

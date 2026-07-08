@@ -22,6 +22,7 @@ class SemanticCache:
         provider: str,
         model: str,
         top_k: int,
+        prompt_scope: str = "",
     ) -> ChatResponse | None:
         if not settings.semantic_cache_enabled:
             return None
@@ -29,7 +30,9 @@ class SemanticCache:
         best_score = -1.0
         best_payload: dict[str, Any] | None = None
         try:
-            for index, key in enumerate(self.redis.scan_iter(f"semantic_cache:{self._scope(user, provider, model, top_k)}:*")):
+            for index, key in enumerate(
+                self.redis.scan_iter(f"semantic_cache:{self._scope(user, provider, model, top_k, prompt_scope)}:*")
+            ):
                 if index >= settings.semantic_cache_max_scan:
                     break
                 raw = self.redis.get(key)
@@ -67,6 +70,7 @@ class SemanticCache:
         model: str,
         top_k: int,
         response: ChatResponse,
+        prompt_scope: str = "",
     ) -> None:
         if not settings.semantic_cache_enabled:
             return
@@ -84,7 +88,7 @@ class SemanticCache:
         }
         try:
             self.redis.set(
-                self._key(query, user, provider, model, top_k),
+                self._key(query, user, provider, model, top_k, prompt_scope),
                 json.dumps(payload),
                 ex=settings.semantic_cache_ttl_seconds,
             )
@@ -99,14 +103,14 @@ class SemanticCache:
         except RedisError:
             return
 
-    def _key(self, query: str, user: User, provider: str, model: str, top_k: int) -> str:
+    def _key(self, query: str, user: User, provider: str, model: str, top_k: int, prompt_scope: str) -> str:
         fingerprint = hashlib.sha256(query.strip().lower().encode("utf-8")).hexdigest()
-        return f"semantic_cache:{self._scope(user, provider, model, top_k)}:{fingerprint}"
+        return f"semantic_cache:{self._scope(user, provider, model, top_k, prompt_scope)}:{fingerprint}"
 
-    def _scope(self, user: User, provider: str, model: str, top_k: int) -> str:
+    def _scope(self, user: User, provider: str, model: str, top_k: int, prompt_scope: str) -> str:
         raw_scope = (
             f"{user.user_id}|{user.department}|{user.clearance}|{','.join(sorted(user.roles))}|"
-            f"{provider}|{model}|{top_k}"
+            f"{provider}|{model}|{top_k}|{prompt_scope}"
         )
         return hashlib.sha256(raw_scope.encode("utf-8")).hexdigest()
 

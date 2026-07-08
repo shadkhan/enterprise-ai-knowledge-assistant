@@ -18,6 +18,7 @@ from app.repositories.costs import cost_repository
 from app.repositories.documents import document_repository
 from app.repositories.evaluations import evaluation_repository
 from app.repositories.feedback import feedback_repository
+from app.repositories.prompts import prompt_repository
 from app.retrieval.service import retrieval_service
 from app.routing.model_router import model_router
 from app.schemas.admin import (
@@ -40,6 +41,12 @@ from app.schemas.documents import (
 )
 from app.schemas.evaluation import EvaluationRecordSummary, EvaluationRequest, EvaluationResponse, GoldenEvaluationRunResponse
 from app.schemas.feedback import FeedbackCreate, FeedbackRecordSummary, FeedbackSummary
+from app.schemas.prompts import (
+    PromptPreviewRequest,
+    PromptPreviewResponse,
+    PromptTemplateCreate,
+    PromptTemplateSummary,
+)
 from app.security.guardrails import guardrails
 
 router = APIRouter()
@@ -132,6 +139,56 @@ def run_admin_evaluations(_: User = Depends(require_admin)) -> GoldenEvaluationR
 @router.get("/admin/feedback", response_model=list[FeedbackRecordSummary])
 def admin_feedback(_: User = Depends(require_admin)) -> list[FeedbackRecordSummary]:
     return feedback_repository.list_recent()
+
+
+@router.get("/admin/prompts", response_model=list[PromptTemplateSummary])
+def admin_prompts(_: User = Depends(require_admin)) -> list[PromptTemplateSummary]:
+    return prompt_repository.list_templates()
+
+
+@router.post("/admin/prompts", response_model=PromptTemplateSummary)
+def create_admin_prompt(payload: PromptTemplateCreate, user: User = Depends(require_admin)) -> PromptTemplateSummary:
+    prompt = prompt_repository.create_version(payload, created_by=user.user_id)
+    if prompt.status == "active":
+        semantic_cache.clear()
+    return prompt
+
+
+@router.post("/admin/prompts/{prompt_id}/activate", response_model=PromptTemplateSummary)
+def activate_admin_prompt(prompt_id: int, _: User = Depends(require_admin)) -> PromptTemplateSummary:
+    prompt = prompt_repository.activate(prompt_id)
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt template not found")
+    semantic_cache.clear()
+    return prompt
+
+
+@router.post("/admin/prompts/{prompt_id}/archive", response_model=PromptTemplateSummary)
+def archive_admin_prompt(prompt_id: int, _: User = Depends(require_admin)) -> PromptTemplateSummary:
+    prompt = prompt_repository.archive(prompt_id)
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt template not found")
+    semantic_cache.clear()
+    return prompt
+
+
+@router.post("/admin/prompts/preview", response_model=PromptPreviewResponse)
+def preview_admin_prompt(payload: PromptPreviewRequest, _: User = Depends(require_admin)) -> PromptPreviewResponse:
+    try:
+        prompt = prompt_repository.get_active(payload.key)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    context_text = "\n\n".join(payload.contexts) or "No authorized context was retrieved."
+    return PromptPreviewResponse(
+        key=prompt.key,
+        version=prompt.version,
+        status=prompt.status,
+        messages=[
+            {"role": "developer", "content": prompt.content},
+            {"role": "user", "content": f"Question:\n{payload.question}\n\nAuthorized context:\n{context_text}"},
+        ],
+    )
 
 
 @router.get("/admin/authentication", response_model=AuthenticationSettings)
@@ -307,6 +364,8 @@ def chat(payload: ChatRequest, user: User = Depends(current_user)) -> ChatRespon
 
     sanitized_question = guardrails.redact_pii(payload.question)
     route = model_router.route(sanitized_question, payload.preferred_quality)
+    chat_prompt = prompt_repository.get_active("rag_chat_system")
+    prompt_scope = f"{chat_prompt.key}:v{chat_prompt.version}"
     retrieved = retrieval_service.search(
         query=sanitized_question,
         user=user,
@@ -321,6 +380,7 @@ def chat(payload: ChatRequest, user: User = Depends(current_user)) -> ChatRespon
             provider=route.provider,
             model=route.model,
             top_k=payload.top_k,
+            prompt_scope=prompt_scope,
         )
         if cached_response is not None:
             latency_ms = round((time.perf_counter() - started) * 1000, 2)
@@ -381,6 +441,8 @@ def chat(payload: ChatRequest, user: User = Depends(current_user)) -> ChatRespon
         citations=citations,
         model=route.model,
         provider=route.provider,
+        prompt_key=chat_prompt.key,
+        prompt_version=chat_prompt.version,
         latency_ms=latency_ms,
         prompt_tokens=usage.prompt_tokens,
         completion_tokens=usage.completion_tokens,
@@ -396,6 +458,7 @@ def chat(payload: ChatRequest, user: User = Depends(current_user)) -> ChatRespon
             model=route.model,
             top_k=payload.top_k,
             response=response,
+            prompt_scope=prompt_scope,
         )
     return response
 
@@ -473,6 +536,8 @@ def runtime_metrics(user: User = Depends(current_user)) -> dict:
             "semantic_cache_enabled": settings.semantic_cache_enabled,
             "default_llm_provider": settings.default_llm_provider,
             "default_embedding_provider": settings.default_embedding_provider,
+            "prompt_library_enabled": True,
+            "active_chat_prompt_version": prompt_repository.get_active("rag_chat_system").version,
         },
     }
 

@@ -22,13 +22,13 @@ Retrieval is security-sensitive. The skeleton filters documents by user role, de
 
 For reranking, I chose `BAAI/bge-reranker-base` as the recommended open-source default. BGE base is a strong RAG reranking baseline, works through `sentence-transformers`, and is a better quality/performance fit for this project than `bge-reranker-large`, which is heavier, or `cross-encoder/ms-marco-MiniLM-L-6-v2`, which is faster but usually weaker. The system retrieves a larger hybrid candidate pool, reranks `(question, chunk)` pairs with BGE, and falls back to the original hybrid order if the reranker is unavailable.
 
-The LLM layer is provider-agnostic. The code defines an interface and currently ships with a deterministic mock provider, an OpenAI-compatible mock provider, and an optional real OpenAI provider using the Responses API. That separation allows routing across OpenAI, Anthropic, Azure-hosted models, or local models without rewriting the orchestration layer. For cost control, the chat flow now also includes a permission-aware semantic answer cache that can reuse high-confidence similar answers before making another LLM call.
+The LLM layer is provider-agnostic. The code defines an interface and currently ships with a deterministic mock provider, an OpenAI-compatible mock provider, and an optional real OpenAI provider using the Responses API. That separation allows routing across OpenAI, Anthropic, Azure-hosted models, or local models without rewriting the orchestration layer. Runtime prompts are now managed through a prompt library with versioned system, retrieval, evaluation, summarization, and guardrail prompts. Chat responses include the prompt key and version, which makes behavior changes easier to debug. For cost control, the chat flow also includes a permission-aware semantic answer cache that can reuse high-confidence similar answers before making another LLM call.
 
 Model routing starts rules-based. Short, simple questions go to a cheap fast model; complex or high-quality requests go to a premium model. Over time, routing can become adaptive using telemetry: answer quality, user feedback, latency SLOs, query category, context size, and budget.
 
 Security includes prompt-injection checks and PII redaction placeholders. A production system would add DLP integration, source trust ranking, output policy checks, secrets detection, and full audit logging.
 
-The admin surface now includes users, authentication, runtime settings, governance, document inventory, ingestion, and job monitoring pages. Today some controls are read-only and backed by mock data/configuration, but they demonstrate the control-plane shape for real SSO, policy management, budget controls, ingestion operations, and audit workflows.
+The admin surface now includes users, authentication, runtime settings, governance, document inventory, ingestion, prompt library, feedback, monitoring, and job monitoring pages. Today some controls are read-only and backed by mock data/configuration, but they demonstrate the control-plane shape for real SSO, policy management, prompt governance, budget controls, ingestion operations, and audit workflows.
 
 Evaluation is intentionally pluggable. The current hook performs simple citation checks. A real system would run golden datasets, LLM-as-judge scoring, groundedness checks, citation precision, and regression tests in CI and production monitoring.
 
@@ -42,6 +42,7 @@ The next evaluation and monitoring phase is a quality control plane. We do not j
 | Online evaluation | Score real generated answers | Catch hallucination and weak grounding in real usage | Persist groundedness, citation precision, uncertainty, and evaluator notes | Admins can triage risky answers |
 | Monitoring | Track runtime health and cost | Diagnose failures and prevent runaway spend | Add runtime metrics for latency, cache hits, reranker fallback, job counts, provider/model cost, and OpenTelemetry-ready spans | Platform teams can operate the assistant responsibly |
 | User feedback | Capture human judgment | Automated metrics miss business nuance | Add thumbs up/down, comments, `/feedback`, and admin review queues | Feedback improves prompts, retrieval, routing, and content quality |
+| Prompt governance | Version and review prompts | Prompt changes affect safety, quality, and cost | Store prompt templates, preview message shape, activate/archive versions, and return prompt metadata on answers | Safer behavior tuning without code edits |
 
 The architecture is also ready for multi-agent workflows because core capabilities are modular: auth, retrieval, LLM providers, evaluation, cost, and logging are separate services. Agents can be added as orchestration layers without bypassing governance.
 
@@ -63,7 +64,7 @@ Track source version, updated timestamp, deletion status, and connector sync cur
 
 Use offline golden datasets, groundedness checks, citation precision, answer completeness, human feedback, and production monitoring by question category.
 
-In this project, Phase 6A is now implemented with an in-repo golden dataset, an admin-triggered evaluation runner, expected-document checks, citation checks, access-control leakage checks, persisted evaluation records, and an `/admin/evaluations` dashboard. Phase 6B is also implemented with chat feedback buttons, persisted feedback records, `/admin/feedback`, `/metrics/runtime`, and `/admin/monitoring`. Later, tools like RAGAS, DeepEval, promptfoo, Langfuse, Arize Phoenix, OpenTelemetry, Prometheus, or Grafana can be plugged in without changing the core RAG flow.
+In this project, Phase 6A is now implemented with an in-repo golden dataset, an admin-triggered evaluation runner, expected-document checks, citation checks, access-control leakage checks, persisted evaluation records, and an `/admin/evaluations` dashboard. Phase 6B is also implemented with chat feedback buttons, persisted feedback records, `/admin/feedback`, `/metrics/runtime`, and `/admin/monitoring`. Phase 6C adds prompt governance through `/admin/prompts`, prompt versioning, prompt preview, activation/archiving, semantic-cache invalidation on prompt changes, and prompt metadata on chat responses. Later, tools like RAGAS, DeepEval, promptfoo, Langfuse, Arize Phoenix, OpenTelemetry, Prometheus, or Grafana can be plugged in without changing the core RAG flow.
 
 ### What happens if retrieval finds nothing?
 

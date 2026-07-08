@@ -375,6 +375,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           <>
             <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-200 pt-3 text-xs sm:grid-cols-4">
               <Metric label="Model" value={message.response.model} />
+              <Metric label="Prompt" value={`${message.response.prompt_key} v${message.response.prompt_version}`} />
               <Metric label="Latency" value={`${message.response.latency_ms} ms`} />
               <Metric label="Tokens" value={`${message.response.prompt_tokens + message.response.completion_tokens}`} />
               <Metric label="Cost" value={`$${message.response.estimated_cost_usd}`} />

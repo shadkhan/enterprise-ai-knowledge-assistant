@@ -19,6 +19,8 @@ class ChatResponse(BaseModel):
     citations: list[Citation]
     model: str
     provider: str
+    prompt_key: str = "rag_chat_system"
+    prompt_version: int = 1
     latency_ms: float
     prompt_tokens: int
     completion_tokens: int

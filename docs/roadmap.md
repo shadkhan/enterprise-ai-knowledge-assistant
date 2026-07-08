@@ -28,6 +28,7 @@
 - SSO integration and enterprise group sync
 - Admin settings write workflows and audit events
 - Feedback capture on answers
+- Prompt library governance for system, retrieval, evaluation, summarization, and guardrail prompts
 
 ## Completed Phase 1 Foundation
 
@@ -80,6 +81,7 @@ We do not just build RAG. We measure retrieval quality, answer groundedness, cit
 | 6A | Admin evaluation dashboard | Make answer quality visible | `/admin/evaluations`, scores, hallucination risk, notes | ✅ Initial version done |
 | 6B | User feedback loop | Capture human judgment | Thumbs up/down, optional comment, `/feedback`, `/admin/feedback` | ✅ Initial version done |
 | 6B | Runtime monitoring | Debug cost, latency, cache, and failures | `/metrics/runtime`, ingestion counts, feature flags, cost, evaluation, and feedback summaries | ✅ Initial version done |
+| 6C | Prompt library and governance | Treat prompts as operational assets | `prompt_templates`, `/admin/prompts`, versioning, preview, activation, archiving, chat prompt metadata | ✅ Initial version done |
 
 Recommended tool path:
 
