@@ -24,6 +24,13 @@ class AuthenticationSettings(BaseModel):
 
 
 class AdminSettings(BaseModel):
+    environment: str
+    deployment_target: str
+    object_storage_provider: str
+    object_storage_bucket: str | None = None
+    auth_provider: str
+    observability_provider: str
+    secrets_provider: str
     default_llm_provider: str
     default_embedding_provider: str
     retrieval_mode: str

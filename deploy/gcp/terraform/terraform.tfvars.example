@@ -1,0 +1,38 @@
+project_id  = "your-gcp-project-id"
+region      = "us-central1"
+environment = "dev"
+name_prefix = "eaka"
+
+# Build and push these images before applying the final Cloud Run deployment.
+backend_image  = "us-central1-docker.pkg.dev/your-gcp-project-id/eaka/backend:dev"
+frontend_image = "us-central1-docker.pkg.dev/your-gcp-project-id/eaka/frontend:dev"
+worker_image   = "us-central1-docker.pkg.dev/your-gcp-project-id/eaka/backend:dev"
+
+# For Next.js, prefer building frontend_image with the final API URL.
+public_api_base_url = ""
+cors_origins        = []
+cors_origin_regex   = "^https://.*\\.run\\.app$"
+
+db_name     = "knowledge"
+db_user     = "app_user"
+db_password = "replace-with-a-strong-password"
+
+cloud_sql_tier              = "db-custom-1-3840"
+cloud_sql_availability_type = "ZONAL"
+cloud_sql_disk_size_gb      = 50
+cloud_sql_deletion_protection = false
+
+redis_tier           = "BASIC"
+redis_memory_size_gb = 1
+
+default_llm_provider       = "mock"
+default_embedding_provider = "mock"
+vertex_location            = "us-central1"
+
+backend_min_instances  = 0
+frontend_min_instances = 0
+
+# Set to 1 for an always-running Redis queue worker.
+worker_min_instances = 0
+
+allow_public_ingress = true

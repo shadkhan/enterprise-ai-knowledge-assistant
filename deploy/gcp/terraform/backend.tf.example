@@ -1,0 +1,9 @@
+# Optional remote state backend.
+# Copy this file to backend.tf after creating the state bucket.
+#
+# terraform {
+#   backend "gcs" {
+#     bucket = "your-terraform-state-bucket"
+#     prefix = "enterprise-ai-knowledge-assistant/gcp/dev"
+#   }
+# }

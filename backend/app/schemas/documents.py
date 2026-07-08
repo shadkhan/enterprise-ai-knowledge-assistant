@@ -46,6 +46,9 @@ class FileIngestionSettings(BaseModel):
     watch_folder: str
     archive_folder: str | None = None
     allowed_extensions: list[str] = Field(default_factory=list)
+    object_storage_provider: str = "local"
+    object_storage_bucket: str | None = None
+    object_storage_prefix: str = "ingestion"
 
 
 class FolderIngestionRequest(BaseModel):

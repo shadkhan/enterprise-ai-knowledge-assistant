@@ -2,6 +2,10 @@ import time
 from typing import List
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
+from redis import Redis
+from redis.exceptions import RedisError
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.auth.rbac import MOCK_USERS, User, authorize_document, get_mock_user
 from app.cache import semantic_cache
@@ -54,6 +58,8 @@ from app.schemas.prompts import (
     PromptTemplateSummary,
 )
 from app.security.guardrails import guardrails
+from app.db.session import engine
+from app.storage import get_storage_provider
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -89,6 +95,30 @@ def _to_user_profile(user: User) -> UserProfile:
 @router.get("/health")
 def health() -> dict:
     return {"status": "ok", "service": "enterprise-ai-knowledge-assistant"}
+
+
+@router.get("/ready")
+def ready() -> dict:
+    checks = {"database": "ok", "redis": "ok"}
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except SQLAlchemyError as exc:
+        checks["database"] = "error"
+        raise HTTPException(status_code=503, detail={"status": "not_ready", "checks": checks}) from exc
+
+    try:
+        Redis.from_url(settings.redis_url, decode_responses=True).ping()
+    except RedisError as exc:
+        checks["redis"] = "error"
+        raise HTTPException(status_code=503, detail={"status": "not_ready", "checks": checks}) from exc
+
+    return {
+        "status": "ready",
+        "environment": settings.environment,
+        "deployment_target": settings.deployment_target,
+        "checks": checks,
+    }
 
 
 @router.get("/auth/me", response_model=UserProfile)
@@ -223,6 +253,13 @@ def admin_authentication(_: User = Depends(require_admin)) -> AuthenticationSett
 @router.get("/admin/settings", response_model=AdminSettings)
 def admin_settings(_: User = Depends(require_admin)) -> AdminSettings:
     return AdminSettings(
+        environment=settings.environment,
+        deployment_target=settings.deployment_target,
+        object_storage_provider=settings.object_storage_provider,
+        object_storage_bucket=settings.object_storage_bucket,
+        auth_provider=settings.auth_provider,
+        observability_provider=settings.observability_provider,
+        secrets_provider=settings.secrets_provider,
         default_llm_provider=settings.default_llm_provider,
         default_embedding_provider=settings.default_embedding_provider,
         retrieval_mode=settings.retrieval_mode,
@@ -246,6 +283,9 @@ def admin_ingestion_settings(_: User = Depends(require_admin)) -> FileIngestionS
         watch_folder=settings.ingestion_watch_folder,
         archive_folder=settings.ingestion_archive_folder,
         allowed_extensions=settings.ingestion_allowed_extensions,
+        object_storage_provider=settings.object_storage_provider,
+        object_storage_bucket=settings.object_storage_bucket,
+        object_storage_prefix=settings.object_storage_prefix,
     )
 
 
@@ -381,6 +421,10 @@ async def ingest_files(
     summaries: list[DocumentSummary] = []
     for upload in files:
         content = await upload.read()
+        try:
+            get_storage_provider().save_upload(filename=upload.filename or "uploaded-file.txt", content=content)
+        except RuntimeError as exc:
+            logger.warning("raw_upload_storage_skipped", extra={"filename": upload.filename, "reason": str(exc)})
         try:
             parsed = parse_uploaded_file(
                 filename=upload.filename or "uploaded-file.txt",

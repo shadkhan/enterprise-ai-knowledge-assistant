@@ -4,8 +4,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "Enterprise AI Knowledge Assistant"
     environment: str = "local"
+    deployment_target: str = "local"
     database_url: str = "sqlite:///./knowledge.db"
     redis_url: str = "redis://localhost:6379/0"
+    object_storage_provider: str = "local"
+    object_storage_bucket: str | None = None
+    object_storage_prefix: str = "ingestion"
+    local_storage_path: str = "./data/ingest"
+    auth_provider: str = "mock"
+    observability_provider: str = "local"
+    secrets_provider: str = "env"
     default_llm_provider: str = "mock"
     openai_api_key: str | None = None
     openai_base_url: str | None = None

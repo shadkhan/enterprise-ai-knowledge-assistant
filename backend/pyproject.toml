@@ -19,12 +19,20 @@ dependencies = [
 ]
 
 [dependency-groups]
+aws = [
+    "boto3>=1.43.42",
+]
 dev = [
     "httpx==0.28.1",
     "pytest==8.3.4",
 ]
 embeddings = [
     "sentence-transformers>=3.3.1",
+]
+gcp = [
+    "google-cloud-logging>=3.16.0",
+    "google-cloud-secret-manager>=2.29.0",
+    "google-cloud-storage>=3.12.0",
 ]
 llm = [
     "openai>=2.0.0",
