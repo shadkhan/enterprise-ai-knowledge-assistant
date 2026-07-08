@@ -6,7 +6,7 @@ This is a secure enterprise search assistant. Employees ask questions in plain E
 
 The important enterprise features are built into the architecture. It checks who the user is, retrieves only documents that user is allowed to see, generates an answer with citations, and records cost, latency, token usage, and model choice. It also has guardrails for prompt-injection risk and hooks to evaluate answer quality.
 
-The implementation is intentionally a skeleton. It uses mock users and mock LLM responses so the architecture is easy to understand, but documents, chunks, costs, and evaluations already persist through a repository layer. Ingestion now uses LangChain for recursive chunking, LlamaIndex for document normalization, Redis-backed jobs for async ingestion, and embedding providers for mock or Hugging Face vectors. Retrieval can use hybrid lexical + vector search, with pgvector in PostgreSQL mode. Each module is shaped like a production component that can be extended with real connectors, enterprise identity, and commercial or local LLM providers.
+The implementation is intentionally a skeleton. It uses five mock enterprise users and mock/default LLM responses so the architecture is easy to understand, but documents, chunks, costs, and evaluations already persist through a repository layer. Ingestion now uses LangChain for recursive chunking, LlamaIndex for document normalization, Redis-backed jobs for async ingestion, and embedding providers for mock or Hugging Face vectors. Retrieval can use hybrid lexical + vector search, with pgvector in PostgreSQL mode. Each module is shaped like a production component that can be extended with real connectors, enterprise identity, and commercial or local LLM providers.
 
 ## 10-minute technical explanation
 
@@ -16,11 +16,13 @@ The ingestion module accepts documents, extracts metadata, converts payloads int
 
 Retrieval is security-sensitive. The skeleton filters documents by user role, department, and clearance before ranking. In production I would enforce authorization both at metadata query time and again before context assembly. The current retrieval path is hybrid: lexical search for exact identifiers and policy names plus vector search for semantic recall. The next quality layer would be reranking, citation span scoring, and retrieval evaluation datasets.
 
-The LLM layer is provider-agnostic. The code defines an interface and currently ships with a deterministic mock provider, an OpenAI-compatible mock provider, and an optional real OpenAI provider using the Responses API. That separation allows routing across OpenAI, Anthropic, Azure-hosted models, or local models without rewriting the orchestration layer.
+The LLM layer is provider-agnostic. The code defines an interface and currently ships with a deterministic mock provider, an OpenAI-compatible mock provider, and an optional real OpenAI provider using the Responses API. That separation allows routing across OpenAI, Anthropic, Azure-hosted models, or local models without rewriting the orchestration layer. For cost control, the chat flow now also includes a permission-aware semantic answer cache that can reuse high-confidence similar answers before making another LLM call.
 
 Model routing starts rules-based. Short, simple questions go to a cheap fast model; complex or high-quality requests go to a premium model. Over time, routing can become adaptive using telemetry: answer quality, user feedback, latency SLOs, query category, context size, and budget.
 
 Security includes prompt-injection checks and PII redaction placeholders. A production system would add DLP integration, source trust ranking, output policy checks, secrets detection, and full audit logging.
+
+The admin surface now includes users, authentication, runtime settings, and governance pages. Today those pages are read-only and backed by mock data/configuration, but they demonstrate the control-plane shape for real SSO, policy management, budget controls, and audit workflows.
 
 Evaluation is intentionally pluggable. The current hook performs simple citation checks. A real system would run golden datasets, LLM-as-judge scoring, groundedness checks, citation precision, and regression tests in CI and production monitoring.
 
@@ -85,7 +87,7 @@ In this project, the foundation already exists: model routing, cost records, tok
 | Token budgets | Set max input/output tokens per request, role, department, and task type | Provider parameters, policy tables, API middleware |
 | Context compression | Reduce retrieved context before generation | Reranking, summarization, contextual compression, MMR |
 | Retrieval quality | Retrieve fewer but better chunks to reduce prompt size | Hybrid search, rerankers, citation filters |
-| Caching | Cache repeated retrieval and safe deterministic answers | Redis, semantic cache, prompt-response cache |
+| Caching | Cache repeated retrieval and safe deterministic answers with strict permission scopes | Redis retrieval cache, semantic answer cache, prompt-response cache |
 | Rate limits | Prevent runaway usage and abuse | Redis rate limiters, API gateway quotas, per-user limits |
 | Budgets | Enforce monthly spend by user/team/department | Postgres usage tables, admin dashboards, alerting |
 | Streaming cutoff | Stop generation early for long or low-value responses | Provider streaming APIs, max token caps |

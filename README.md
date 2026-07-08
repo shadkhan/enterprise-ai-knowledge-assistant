@@ -18,18 +18,18 @@ The current project is a runnable MVP plus part of the persistent RAG foundation
 
 | Area | Current State |
 | --- | --- |
-| Backend API | FastAPI service with `/chat`, `/ingest`, `/documents`, `/health`, `/metrics/cost`, and `/evaluate` |
-| Identity | Mock users with role, department, and clearance fields |
+| Backend API | FastAPI service with chat, ingestion, documents, health, metrics, evaluation, auth, and admin endpoints |
+| Identity | Five mock users with email, role, department, clearance, status, auth provider, and last login fields |
 | Authorization | Permission-aware document filtering before retrieval context assembly |
 | Storage | SQLAlchemy repositories with SQLite for backend-only local mode and PostgreSQL for Docker mode |
 | Chunking | LangChain `RecursiveCharacterTextSplitter` |
 | Document normalization | LlamaIndex `Document` objects before chunking |
 | Ingestion jobs | Redis-backed queue with worker process and status API |
 | Embeddings | Mock provider by default; optional Hugging Face `sentence-transformers/all-MiniLM-L6-v2` provider |
-| Cache | Redis retrieval cache with short TTL and ingestion-time invalidation |
+| Cache | Redis retrieval cache plus permission-aware semantic answer cache with ingestion-time invalidation |
 | Retrieval | Hybrid lexical + vector retrieval with pgvector on Postgres and metadata fallback on SQLite |
 | LLM | Mock provider, OpenAI-compatible mock provider, and optional real OpenAI Responses API provider |
-| UI | Next.js chat UI with conversation history, source panel, visible documents, user selector, quality selector, and typewriter animation |
+| UI | Next.js chat UI plus admin pages for metrics, users, authentication, settings, and governance |
 | Observability | Structured logs plus persisted cost/evaluation records |
 | Package Managers | `uv` for Python, `pnpm` for Node/Next.js |
 | Infra | Docker Compose with backend, frontend, PostgreSQL + pgvector, and Redis |
@@ -45,10 +45,14 @@ The current project is a runnable MVP plus part of the persistent RAG foundation
 | Hugging Face embeddings | ✅ Done | Optional local provider using `sentence-transformers/all-MiniLM-L6-v2` |
 | Mock embeddings | ✅ Done | Default fast provider for tests and lightweight demos |
 | Retrieval cache | ✅ Done | Redis-backed short-lived cache for repeated authorized searches |
+| Semantic answer cache | ✅ Done | Reuses safe similar answers by user/provider/model scope to reduce repeated LLM calls |
 | Document visibility | ✅ Done | Filters by mock user role, department, and clearance |
+| Mock authentication | ✅ Done | `X-User-Id` header resolves the active mock user |
+| Admin users API | ✅ Done | Lists five mock enterprise users for admin demos |
+| Admin governance API | ✅ Done | Shows current/planned policy controls and enforcement notes |
 | Persistence | ✅ Done | Documents, chunks, costs, and evaluations persist |
 | Demo seed data | ✅ Done | Seeds a `Remote Work Policy` document when DB is empty |
-| Admin metrics | ✅ Done | Shows request/token/cost summary |
+| Admin console | ✅ Done | Metrics, users, authentication, settings, and governance pages |
 | Chat UI | ✅ Done | Professional chat workspace with response animation |
 | Local CORS | ✅ Done | Allows local frontend ports such as `3000`, `3001`, etc. |
 
@@ -87,7 +91,7 @@ Persistence + Logs + Evaluation Hooks
 | Backend | FastAPI, Pydantic, SQLAlchemy |
 | LangChain | Framework dependency plus `RecursiveCharacterTextSplitter` for chunking |
 | Document normalization | LlamaIndex core |
-| Queue/cache | Redis list, job status records, and retrieval cache |
+| Queue/cache | Redis list, job status records, retrieval cache, and semantic answer cache |
 | Embeddings | Mock provider and optional Hugging Face sentence-transformers provider |
 | LLM providers | Mock, OpenAI-compatible mock, optional OpenAI SDK provider |
 | Vector search | pgvector on Postgres, metadata-vector fallback on SQLite |
@@ -235,8 +239,20 @@ http://localhost:8000
 | `u-admin` | admin | IT | restricted |
 | `u-hr` | employee, knowledge_manager | HR | internal |
 | `u-employee` | employee | Engineering | internal |
+| `u-finance` | employee, finance_reviewer | Finance | restricted |
+| `u-legal` | employee, legal_reviewer | Legal | restricted |
 
 Pass the selected user with the `X-User-Id` header. The frontend also includes a user selector.
+
+## Admin Pages
+
+| Page | URL | Purpose |
+| --- | --- | --- |
+| Metrics | `http://localhost:3000/admin` | Request, token, and cost summary |
+| Users | `http://localhost:3000/admin/users` | Five mock users with roles, departments, clearance, and status |
+| Authentication | `http://localhost:3000/admin/authentication` | Mock SSO mode, login header, session, MFA, and planned providers |
+| Settings | `http://localhost:3000/admin/settings` | Runtime provider, cache, retrieval, and fallback settings |
+| Governance | `http://localhost:3000/admin/governance` | Policy controls for RBAC, semantic cache, PII, and audit readiness |
 
 ## 📡 API Examples
 
@@ -356,6 +372,7 @@ curl http://localhost:8000/ingest/jobs/{job_id} \
 | Synthetic content generation | ✅ Done | Generates document, PDF-like, data, JSON, and text content for demos/tests |
 | Mock embedding provider | ✅ Done | Deterministic embedding interface for ingestion tests and demos |
 | Retrieval cache | ✅ Done | Redis-backed cache cleared after ingestion |
+| Semantic answer cache | ✅ Done | Cleared after ingestion so changed knowledge does not return stale answers |
 | Alembic migrations | ⏳ Planned | Needed before production-style DB changes |
 | Audit log repository | ⏳ Planned | Persist sensitive access events |
 | Embedding provider abstraction | ✅ Done | Mock and Hugging Face providers |
@@ -374,6 +391,7 @@ curl http://localhost:8000/ingest/jobs/{job_id} \
 | Async synthetic ingestion job | ✅ Done | `POST /synthetic/jobs` |
 | Mock embedding generation | ✅ Done | Runs during sync and async ingestion |
 | Retrieval cache | ✅ Done | Caches repeated authorized search results for a short TTL |
+| Semantic answer cache | ✅ Done | Avoids repeated LLM calls for highly similar authorized questions |
 | File upload endpoint | ⏳ Planned | Admin file ingestion |
 | Parser interface | ⏳ Planned | Common parser contract |
 | PDF parser | ⏳ Planned | Text extraction from PDF |
@@ -394,6 +412,7 @@ curl http://localhost:8000/ingest/jobs/{job_id} \
 | Reranking interface | ⏳ Planned | Improve final context precision |
 | Context assembly service | ⏳ Planned | Centralize context packing |
 | Context compression | ⏳ Planned | Reduce token cost |
+| Semantic answer cache | ✅ Done | Permission-aware cache for repeated/similar questions |
 | Citation span tracking | ⏳ Planned | More trustworthy citations |
 | No-result handling | ⏳ Planned | Avoid fabricated answers |
 | Low-confidence handling | ⏳ Planned | Clarify/escalate uncertain answers |
@@ -486,6 +505,7 @@ Important constraint: agents must reuse shared auth, retrieval, logging, cost, a
 | --- | --- | --- |
 | Mock LLM default | The default provider is still mock so the app runs without API keys | Set `DEFAULT_LLM_PROVIDER=openai` and `OPENAI_API_KEY` |
 | Mock embeddings | Default embeddings are deterministic demo vectors unless Hugging Face provider is enabled | Enable `DEFAULT_EMBEDDING_PROVIDER=huggingface` |
+| Semantic cache | Cache only hits for same user scope, provider, model, and high embedding similarity | Tune threshold and TTL for production |
 | Retrieval quality | Hybrid retrieval exists, but reranking and citation precision are still basic | Phase 3 reranking and retrieval evaluation |
 | Local typewriter animation | Text animates in the UI after the full API response arrives | Phase 4 streamed backend responses |
 | Mock RBAC | Access rules are demo-only and not tied to enterprise identity | Phase 5 SSO/JWT/ABAC |

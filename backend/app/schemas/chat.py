@@ -24,4 +24,6 @@ class ChatResponse(BaseModel):
     completion_tokens: int
     estimated_cost_usd: float
     guardrail_flags: list[str]
-
+    semantic_cache_hit: bool = False
+    semantic_cache_score: float | None = None
+    semantic_cache_source_question: str | None = None

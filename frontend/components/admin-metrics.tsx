@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Activity, DollarSign, Gauge, RefreshCw } from "lucide-react";
 import { getCostMetrics } from "../lib/api";
+import { AdminShell } from "./admin-shell";
 
 export function AdminMetrics() {
   const [metrics, setMetrics] = useState<Record<string, unknown> | null>(null);
@@ -28,13 +29,8 @@ export function AdminMetrics() {
   const estimatedCost = Number(metrics?.estimated_cost_usd ?? 0);
 
   return (
-    <main className="min-h-screen bg-slate-100 px-5 py-6 text-slate-950">
-      <div className="mx-auto max-w-6xl">
-        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase text-slate-500">Admin</p>
-            <h1 className="mt-1 text-2xl font-semibold">Usage Metrics</h1>
-          </div>
+    <AdminShell title="Usage Metrics" eyebrow="Admin">
+      <div className="flex justify-end">
           <button
             type="button"
             onClick={refresh}
@@ -44,7 +40,7 @@ export function AdminMetrics() {
             <RefreshCw className={loading ? "animate-spin" : ""} size={16} aria-hidden="true" />
             Refresh
           </button>
-        </header>
+        </div>
 
         {error && <div className="mt-5 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
@@ -62,8 +58,7 @@ export function AdminMetrics() {
             {JSON.stringify(metrics ?? { status: loading ? "Loading metrics..." : "No metrics yet." }, null, 2)}
           </pre>
         </section>
-      </div>
-    </main>
+    </AdminShell>
   );
 }
 

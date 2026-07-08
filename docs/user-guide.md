@@ -171,7 +171,24 @@ uv run uvicorn app.main:app --reload
 
 By default, `OPENAI_FALLBACK_TO_MOCK=true`, so missing keys, missing SDK dependencies, or API failures fall back to the OpenAI-compatible mock provider.
 
-## 8. Test The Application In The UI
+## 8. Semantic Cache
+
+Semantic cache is enabled by default. It stores completed chat answers in Redis using the question embedding and a strict permission-aware scope.
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `SEMANTIC_CACHE_ENABLED` | `true` | Enables answer reuse for similar questions |
+| `SEMANTIC_CACHE_TTL_SECONDS` | `3600` | Keeps semantic answers for one hour |
+| `SEMANTIC_CACHE_SIMILARITY_THRESHOLD` | `0.94` | Requires high semantic similarity before reuse |
+| `SEMANTIC_CACHE_MAX_SCAN` | `200` | Limits Redis entries scanned per request |
+
+Cache scope includes user ID, roles, department, clearance, provider, model, and `top_k`. This keeps cached answers inside the same permission and routing boundary.
+
+When semantic cache hits, `/chat` returns `semantic_cache_hit=true`, zero current-call tokens, and zero current-call estimated cost. The frontend also shows a `Cache` metric on cached assistant messages.
+
+Ingestion clears both retrieval cache and semantic answer cache so new or changed documents can be discovered.
+
+## 9. Test The Application In The UI
 
 1. Open the frontend.
 2. Select a user from the user selector.
@@ -198,8 +215,24 @@ Recommended users:
 | `u-admin` | Full admin demo and ingestion |
 | `u-hr` | HR/internal access checks |
 | `u-employee` | Normal employee access checks |
+| `u-finance` | Finance restricted-access demo |
+| `u-legal` | Legal restricted-access demo |
 
-## 9. Test The Backend APIs
+## 10. Test Admin Pages
+
+Start the frontend and backend, then open:
+
+| Page | URL |
+| --- | --- |
+| Metrics | `http://localhost:3000/admin` |
+| Users | `http://localhost:3000/admin/users` |
+| Authentication | `http://localhost:3000/admin/authentication` |
+| Settings | `http://localhost:3000/admin/settings` |
+| Governance | `http://localhost:3000/admin/governance` |
+
+The admin pages call backend APIs as `u-admin`. The current authentication model is mock header authentication through `X-User-Id`; real SSO/OIDC/SAML is planned for a later phase.
+
+## 11. Test The Backend APIs
 
 Health check:
 
@@ -263,7 +296,21 @@ curl http://localhost:8000/metrics/cost `
   -H "X-User-Id: u-admin"
 ```
 
-## 10. Run Automated Checks
+List mock users:
+
+```powershell
+curl http://localhost:8000/admin/users `
+  -H "X-User-Id: u-admin"
+```
+
+Review governance settings:
+
+```powershell
+curl http://localhost:8000/admin/governance `
+  -H "X-User-Id: u-admin"
+```
+
+## 12. Run Automated Checks
 
 Backend tests:
 
@@ -300,7 +347,7 @@ cd infra
 docker compose config --quiet
 ```
 
-## 11. Troubleshooting
+## 13. Troubleshooting
 
 | Problem | Likely Cause | Fix |
 | --- | --- | --- |
@@ -311,17 +358,21 @@ docker compose config --quiet
 | Docker push fails with large `.pnpm-store` files | Local package store was accidentally committed | Remove `.pnpm-store` from git history and keep it ignored |
 | Hugging Face run is slow first time | Model download and dependency loading | Wait for first model download to complete |
 | OpenAI provider returns mock-style answer | Fallback is enabled, API key is missing, or SDK is not installed | Run `uv --system-certs sync --group llm` and set `OPENAI_API_KEY` |
+| `http://localhost:11434` does not open | That is an Ollama API port, not this project's web preview | Ignore it unless you separately install and run Ollama; this project uses `3000/3001` for frontend and `8000` for backend |
+| Semantic cache does not hit | Redis is not running, cache is cold, or similarity is below threshold | Ask the same or very similar question twice with the same user/model route |
 | Redis job stays queued | Worker is not running | Use Docker full stack or start `python -m app.worker` with backend environment |
 
-## 12. What Is Mocked Today
+## 14. What Is Mocked Today
 
 | Area | Current Behavior |
 | --- | --- |
 | LLM default | Mock provider returns grounded demo answers unless `DEFAULT_LLM_PROVIDER` is changed |
 | OpenAI fallback | Real OpenAI provider can fall back to OpenAI-compatible mock |
 | Default embeddings | Mock vectors unless Hugging Face provider is enabled |
+| Semantic cache | Uses mock or Hugging Face embeddings depending on `DEFAULT_EMBEDDING_PROVIDER` |
 | Streaming | UI animates full responses locally; backend token streaming is planned |
 | Identity | Mock users and RBAC, not real SSO |
+| Admin settings | Read-only mock settings and governance pages |
 | Evaluation | Basic placeholder scoring |
 
 This means the project is suitable for architecture demos, API testing, ingestion flow testing, retrieval flow testing, and frontend walkthroughs. Production-grade SSO, real model calls, real file parsers, reranking, streaming, and stronger governance are planned phases.

@@ -35,6 +35,8 @@ const USERS: Array<{ id: MockUserId; label: string; detail: string }> = [
   { id: "u-employee", label: "Employee", detail: "Engineering, internal" },
   { id: "u-hr", label: "HR Manager", detail: "HR, internal" },
   { id: "u-admin", label: "Admin", detail: "IT, restricted" },
+  { id: "u-finance", label: "Finance", detail: "Finance, restricted" },
+  { id: "u-legal", label: "Legal", detail: "Legal, restricted" },
 ];
 
 const SUGGESTIONS = [
@@ -345,6 +347,9 @@ function MessageBubble({ message }: { message: ChatMessage }) {
             <Metric label="Latency" value={`${message.response.latency_ms} ms`} />
             <Metric label="Tokens" value={`${message.response.prompt_tokens + message.response.completion_tokens}`} />
             <Metric label="Cost" value={`$${message.response.estimated_cost_usd}`} />
+            {message.response.semantic_cache_hit && (
+              <Metric label="Cache" value={`Semantic ${message.response.semantic_cache_score ?? ""}`} />
+            )}
           </div>
         )}
       </div>

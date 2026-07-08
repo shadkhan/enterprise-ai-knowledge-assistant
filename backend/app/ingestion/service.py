@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from app.cache import retrieval_cache
+from app.cache import retrieval_cache, semantic_cache
 from app.embeddings import get_embedding_provider
 from app.ingestion.chunking import chunk_llama_document
 from app.ingestion.metadata import extract_metadata
@@ -39,6 +39,7 @@ class IngestionService:
             ]
         document_repository.save_document(summary, chunks)
         retrieval_cache.clear()
+        semantic_cache.clear()
         return [summary]
 
     def ingest_synthetic(

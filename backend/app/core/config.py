@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     ingestion_queue_name: str = "ingestion_jobs"
     ingestion_job_ttl_seconds: int = 86400
     retrieval_cache_ttl_seconds: int = 300
+    semantic_cache_enabled: bool = True
+    semantic_cache_ttl_seconds: int = 3600
+    semantic_cache_similarity_threshold: float = 0.94
+    semantic_cache_max_scan: int = 200
     enable_demo_seed: bool = True
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
     cors_origin_regex: str = r"^http://(localhost|127\.0\.0\.1):\d+$"

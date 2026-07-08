@@ -29,6 +29,12 @@ The ingestion foundation now uses LangChain and LlamaIndex:
 
 ## Components
 
+### Mock identity and admin APIs
+
+The demo uses five mock enterprise users resolved from the `X-User-Id` header. Each user has email, roles, department, clearance, status, auth provider, and last-login metadata.
+
+Admin-only endpoints expose users, authentication settings, runtime settings, and governance policy summaries. These endpoints are read-only today, but they establish the API shape for future SSO, ABAC, audit, and policy administration.
+
 ### API
 
 FastAPI exposes:
@@ -40,6 +46,11 @@ FastAPI exposes:
 - `POST /synthetic/jobs`: enqueue an asynchronous synthetic ingestion job
 - `GET /ingest/jobs/{job_id}`: inspect ingestion job status
 - `GET /documents`: visible documents for current user
+- `GET /auth/me`: current mock user profile
+- `GET /admin/users`: admin-only mock user directory
+- `GET /admin/authentication`: admin-only authentication configuration
+- `GET /admin/settings`: admin-only runtime settings summary
+- `GET /admin/governance`: admin-only governance policy summary
 - `GET /health`: liveness endpoint
 - `GET /metrics/cost`: admin cost summary
 - `POST /evaluate`: answer quality evaluation hook
@@ -115,6 +126,20 @@ Current caching behavior:
 - Cache entries have a short TTL.
 - Ingestion clears retrieval cache entries so newly ingested documents can be discovered.
 - If Redis is unavailable, retrieval still works without caching.
+
+### Semantic answer cache
+
+The chat endpoint also has a Redis-backed semantic answer cache. After authorization-aware retrieval and model routing, the API embeds the sanitized question, searches cache entries in the same user/provider/model scope, and reuses the best answer only when similarity is above the configured threshold.
+
+| Cache Dimension | Current Behavior |
+| --- | --- |
+| Scope | User ID, roles, department, clearance, provider, model, and `top_k` |
+| Similarity | Cosine similarity over the configured embedding provider |
+| TTL | Controlled by `SEMANTIC_CACHE_TTL_SECONDS` |
+| Invalidation | Cleared after document ingestion |
+| Failure mode | If Redis or embeddings fail, the request continues without semantic cache |
+
+On a hit, the API returns the cached answer with `semantic_cache_hit=true`, zero current-call tokens, and zero current-call estimated cost.
 
 ### LLM abstraction
 
