@@ -1,5 +1,9 @@
+name: eaka
+
 services:
   backend:
+    container_name: eaka-backend
+    image: eaka-backend:local
     build:
       context: ../backend
     environment:
@@ -27,6 +31,8 @@ services:
       - redis
 
   worker:
+    container_name: eaka-worker
+    image: eaka-backend:local
     build:
       context: ../backend
     command: ["uv", "run", "python", "-m", "app.worker"]
@@ -53,6 +59,7 @@ services:
       - redis
 
   frontend:
+    container_name: eaka-frontend
     image: node:22-alpine
     working_dir: /app
     command: sh -c "corepack enable && pnpm install && pnpm dev"
@@ -68,6 +75,7 @@ services:
       - backend
 
   postgres:
+    container_name: eaka-postgres
     image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: postgres
@@ -80,6 +88,7 @@ services:
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
 
   redis:
+    container_name: eaka-redis
     image: redis:7-alpine
     ports:
       - "6379:6379"
@@ -88,5 +97,8 @@ services:
 
 volumes:
   postgres_data:
+    name: eaka-postgres-data
   redis_data:
+    name: eaka-redis-data
   frontend_node_modules:
+    name: eaka-frontend-node-modules

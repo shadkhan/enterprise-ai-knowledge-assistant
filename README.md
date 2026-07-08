@@ -138,6 +138,18 @@ Open:
 | PostgreSQL | `localhost:5432` |
 | Redis | `localhost:6379` |
 
+Docker Desktop names are project-specific:
+
+| Resource | Name |
+| --- | --- |
+| Compose project | `eaka` |
+| Backend container/image | `eaka-backend` / `eaka-backend:local` |
+| Worker container/image | `eaka-worker` / `eaka-backend:local` |
+| Frontend container | `eaka-frontend` |
+| PostgreSQL container | `eaka-postgres` |
+| Redis container | `eaka-redis` |
+| Volumes | `eaka-postgres-data`, `eaka-redis-data`, `eaka-frontend-node-modules` |
+
 The backend allows local frontend origins on any port, so `localhost:3000`, `localhost:3001`, and similar local dev ports can call the API.
 
 ## ⚙️ Backend Only
@@ -553,7 +565,7 @@ Important constraint: agents must reuse shared auth, retrieval, logging, cost, a
 | Frontend type check | `cd frontend && pnpm exec tsc --noEmit` | TypeScript passes |
 | Frontend production build | `cd frontend && pnpm build` | Next.js build succeeds |
 | Backend health | `curl http://localhost:8000/health` | Returns `{"status":"ok",...}` |
-| Docker full stack | `cd infra && docker compose up --build` | Backend, frontend, Postgres, Redis start |
+| Docker full stack | `cd infra && docker compose up --build` | Project-specific `eaka-*` containers start |
 
 ## 📝 Current Mock Limitations
 

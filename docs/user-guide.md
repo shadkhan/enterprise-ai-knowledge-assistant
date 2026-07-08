@@ -58,6 +58,15 @@ Open these URLs:
 | Backend API docs | `http://localhost:8000/docs` |
 | Backend health check | `http://localhost:8000/health` |
 
+Docker Desktop will show project-specific names:
+
+| Resource | Name |
+| --- | --- |
+| Compose project | `eaka` |
+| Containers | `eaka-backend`, `eaka-worker`, `eaka-frontend`, `eaka-postgres`, `eaka-redis` |
+| Backend image | `eaka-backend:local` |
+| Volumes | `eaka-postgres-data`, `eaka-redis-data`, `eaka-frontend-node-modules` |
+
 If port `3000` is busy, Docker or Next.js may use another local port such as `3001`. Check the terminal output.
 
 ## 4. Run Backend Only
