@@ -1,6 +1,7 @@
 from app.embeddings.mock_provider import MockEmbeddingProvider
-from app.ingestion.jobs import synthetic_from_job
+from app.ingestion.jobs import IngestionJobQueue, synthetic_from_job
 from app.schemas.documents import SyntheticContentRequest
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 
 def test_mock_embedding_provider_is_deterministic() -> None:
@@ -24,3 +25,14 @@ def test_synthetic_job_payload_round_trip() -> None:
 
     assert restored.content_type == "data"
     assert restored.topic == "Quarterly Controls"
+
+
+def test_ingestion_queue_timeout_returns_no_job() -> None:
+    class TimeoutRedis:
+        def blpop(self, *_args, **_kwargs):
+            raise RedisTimeoutError("Timeout reading from socket")
+
+    queue = IngestionJobQueue()
+    queue.redis = TimeoutRedis()
+
+    assert queue.dequeue() is None

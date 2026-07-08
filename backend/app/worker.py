@@ -1,5 +1,6 @@
 import time
 
+from redis.exceptions import RedisError
 from sqlalchemy.exc import OperationalError
 
 from app.db import init_db
@@ -54,7 +55,12 @@ def main() -> None:
             time.sleep(1)
     logger.info("ingestion_worker_started")
     while True:
-        job = ingestion_job_queue.dequeue()
+        try:
+            job = ingestion_job_queue.dequeue()
+        except RedisError:
+            logger.exception("ingestion_worker_redis_unavailable")
+            time.sleep(5)
+            continue
         if job is None:
             time.sleep(1)
             continue

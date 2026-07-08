@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from redis import Redis
-from redis.exceptions import RedisError
+from redis.exceptions import RedisError, TimeoutError as RedisTimeoutError
 
 from app.core.config import settings
 from app.schemas.documents import (
@@ -21,7 +21,12 @@ def utc_now() -> str:
 
 class IngestionJobQueue:
     def __init__(self) -> None:
-        self.redis = Redis.from_url(settings.redis_url, decode_responses=True)
+        self.redis = Redis.from_url(
+            settings.redis_url,
+            decode_responses=True,
+            health_check_interval=30,
+            socket_keepalive=True,
+        )
 
     def enqueue_document(self, payload: IngestionJobCreate, owner_id: str) -> IngestionJobStatus:
         return self._enqueue(
@@ -44,7 +49,10 @@ class IngestionJobQueue:
         )
 
     def dequeue(self, timeout_seconds: int = 5) -> dict | None:
-        item = self.redis.blpop(settings.ingestion_queue_name, timeout=timeout_seconds)
+        try:
+            item = self.redis.blpop(settings.ingestion_queue_name, timeout=timeout_seconds)
+        except RedisTimeoutError:
+            return None
         if not item:
             return None
         _, raw_job = item
