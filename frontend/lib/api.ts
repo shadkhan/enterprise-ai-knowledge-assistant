@@ -91,6 +91,41 @@ export type IngestionJobStatus = {
   result_document_ids: string[];
 };
 
+export type EvaluationRecordSummary = {
+  id: number;
+  user_id: string;
+  question: string;
+  answer: string;
+  score: number;
+  hallucination_risk: string;
+  notes: string[];
+  created_at: string;
+};
+
+export type GoldenEvaluationRunResponse = {
+  run_id: string;
+  total_cases: number;
+  passed_cases: number;
+  failed_cases: number;
+  results: Array<{
+    case_id: string;
+    question: string;
+    user_id: string;
+    passed: boolean;
+    score: number;
+    hallucination_risk: string;
+    expected_document_found: boolean;
+    forbidden_document_leaked: boolean;
+    citations: Array<{
+      document_id: string;
+      title: string;
+      chunk_id: string;
+      score: number;
+    }>;
+    notes: string[];
+  }>;
+};
+
 export type AuthenticationSettings = {
   mode: string;
   active_provider: string;
@@ -312,6 +347,31 @@ export async function getAdminIngestionJobs(): Promise<IngestionJobStatus[]> {
 
   if (!response.ok) {
     throw new Error(`Ingestion jobs request failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function getAdminEvaluations(): Promise<EvaluationRecordSummary[]> {
+  const response = await fetch(`${API_BASE_URL}/admin/evaluations`, {
+    headers: { "X-User-Id": "u-admin" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Evaluations request failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function runGoldenEvaluations(): Promise<GoldenEvaluationRunResponse> {
+  const response = await fetch(`${API_BASE_URL}/admin/evaluations/run`, {
+    method: "POST",
+    headers: { "X-User-Id": "u-admin" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Evaluation run failed: ${await parseError(response)}`);
   }
 
   return response.json();

@@ -87,6 +87,10 @@ Persistence + Logs + Evaluation Hooks
 
 ## 🛠️ Tech Stack
 
+### Keywords
+
+FastAPI, Pydantic, SQLAlchemy, SQLite, PostgreSQL, pgvector, Redis, LangChain, LlamaIndex, Hugging Face, sentence-transformers, BAAI/bge-reranker-base, OpenAI Responses API, RAG, hybrid retrieval, semantic cache, retrieval cache, cross-encoder reranking, golden evaluations, RBAC, mock SSO, structured JSON logging, Next.js, React, Tailwind CSS, lucide-react, TypeScript, pnpm, uv, Docker Compose, pytest.
+
 | Layer | Technology |
 | --- | --- |
 | Backend | FastAPI, Pydantic, SQLAlchemy |
@@ -479,14 +483,14 @@ curl http://localhost:8000/ingest/jobs/{job_id} \
 
 | Module | Status | Notes |
 | --- | --- | --- |
-| Phase 6A in-repo evaluation | ⏳ Planned | Golden questions, pytest eval runner, retrieval/citation/access checks |
-| Phase 6A admin quality dashboard | ⏳ Planned | `/admin/evaluations` for scores, risk, and notes |
+| Phase 6A in-repo evaluation | ✅ Done | Golden questions, admin eval runner, retrieval/citation/access checks |
+| Phase 6A admin quality dashboard | ✅ Done | `/admin/evaluations` for scores, risk, and notes |
 | Phase 6B user feedback | ⏳ Planned | Thumbs up/down, comments, and review queue |
 | Phase 6B runtime metrics | ⏳ Planned | Cache hits, reranker status, latency, job counts, and model cost |
 | OpenTelemetry traces | ⏳ Planned | End-to-end request visibility |
 | Request/retrieval/LLM/evaluation spans | ⏳ Planned | Debug latency and failures |
 | Metrics dashboard data model | ⏳ Planned | Persist dashboard-ready aggregates |
-| Golden evaluation datasets | ⏳ Planned | Regression testing |
+| Golden evaluation datasets | ✅ Done | Initial in-repo regression dataset |
 | Groundedness scoring | ⏳ Planned | Detect unsupported answers |
 | Citation precision scoring | ⏳ Planned | Check cited source relevance |
 | User feedback capture | ⏳ Planned | Improve quality loops |
@@ -514,7 +518,7 @@ We do not just build RAG. We measure retrieval quality, answer groundedness, cit
 | Connector status page | ⏳ Planned | Monitor external source sync |
 | Ingestion job monitor | ✅ Done | Track queued, running, completed, and failed jobs |
 | Cost dashboard | ✅ Done | Spend by model/user/department |
-| Evaluation dashboard | ⏳ Planned | Quality and hallucination monitoring |
+| Evaluation dashboard | ✅ Done | Run golden evals and review persisted evaluation records |
 | Feedback review queue | ⏳ Planned | Human review workflow |
 | User and role demo switcher | ✅ Done | Five mock users available in the chat UI |
 

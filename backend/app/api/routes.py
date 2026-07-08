@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.cost.tracker import cost_tracker
 from app.embeddings import get_embedding_provider
 from app.evaluation.service import evaluator
+from app.evaluation.golden_runner import golden_evaluation_runner
 from app.ingestion.jobs import ingestion_job_queue
 from app.ingestion.service import ingestion_service
 from app.llm.factory import get_llm_provider
@@ -36,7 +37,7 @@ from app.schemas.documents import (
     SyntheticContentRequest,
     SyntheticIngestionJobCreate,
 )
-from app.schemas.evaluation import EvaluationRequest, EvaluationResponse
+from app.schemas.evaluation import EvaluationRecordSummary, EvaluationRequest, EvaluationResponse, GoldenEvaluationRunResponse
 from app.security.guardrails import guardrails
 
 router = APIRouter()
@@ -114,6 +115,16 @@ def admin_document_detail(document_id: str, _: User = Depends(require_admin)) ->
 @router.get("/admin/ingest/jobs", response_model=list[IngestionJobStatus])
 def admin_ingestion_jobs(_: User = Depends(require_admin)) -> list[IngestionJobStatus]:
     return ingestion_job_queue.list_statuses()
+
+
+@router.get("/admin/evaluations", response_model=list[EvaluationRecordSummary])
+def admin_evaluations(_: User = Depends(require_admin)) -> list[EvaluationRecordSummary]:
+    return evaluation_repository.list_recent()
+
+
+@router.post("/admin/evaluations/run", response_model=GoldenEvaluationRunResponse)
+def run_admin_evaluations(_: User = Depends(require_admin)) -> GoldenEvaluationRunResponse:
+    return golden_evaluation_runner.run()
 
 
 @router.get("/admin/authentication", response_model=AuthenticationSettings)

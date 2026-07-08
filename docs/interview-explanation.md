@@ -1,5 +1,9 @@
 # Interview Explanation
 
+## Tech Stack Keywords
+
+FastAPI, Pydantic, SQLAlchemy, SQLite, PostgreSQL, pgvector, Redis, LangChain, LlamaIndex, Hugging Face, sentence-transformers, BAAI/bge-reranker-base, OpenAI Responses API, RAG, hybrid retrieval, semantic cache, retrieval cache, cross-encoder reranking, golden evaluations, RBAC, mock SSO, structured JSON logging, Next.js, React, Tailwind CSS, lucide-react, TypeScript, pnpm, uv, Docker Compose, pytest.
+
 ## 2-minute HR or senior-manager explanation
 
 This is a secure enterprise search assistant. Employees ask questions in plain English, and the system answers using approved internal knowledge such as policies, SOPs, Confluence pages, SharePoint files, Jira tickets, and PDFs.
@@ -59,7 +63,7 @@ Track source version, updated timestamp, deletion status, and connector sync cur
 
 Use offline golden datasets, groundedness checks, citation precision, answer completeness, human feedback, and production monitoring by question category.
 
-In this project I would implement that in two phases. Phase 6A adds an in-repo golden dataset, a pytest evaluation runner, expected-document checks, citation checks, and access-control leakage tests. Phase 6B adds user feedback, an admin feedback review queue, runtime metrics, and monitoring dashboards. Later, tools like RAGAS, DeepEval, promptfoo, Langfuse, Arize Phoenix, OpenTelemetry, Prometheus, or Grafana can be plugged in without changing the core RAG flow.
+In this project, Phase 6A is now implemented with an in-repo golden dataset, an admin-triggered evaluation runner, expected-document checks, citation checks, access-control leakage checks, persisted evaluation records, and an `/admin/evaluations` dashboard. Phase 6B will add user feedback, an admin feedback review queue, runtime metrics, and monitoring dashboards. Later, tools like RAGAS, DeepEval, promptfoo, Langfuse, Arize Phoenix, OpenTelemetry, Prometheus, or Grafana can be plugged in without changing the core RAG flow.
 
 ### What happens if retrieval finds nothing?
 

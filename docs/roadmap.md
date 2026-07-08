@@ -66,7 +66,7 @@
 - Reranking analytics and context compression
 - Semantic answer cache hardening with analytics and admin controls
 - Advanced prompt-injection and DLP controls
-- Golden evaluation datasets and CI quality gates
+- Golden evaluation datasets and admin quality dashboard
 - Department-level budgets, quotas, and rate limits
 - Streaming responses and better citation UX
 
@@ -76,8 +76,8 @@ We do not just build RAG. We measure retrieval quality, answer groundedness, cit
 
 | Phase | What | Why | How | Result |
 | --- | --- | --- | --- | --- |
-| 6A | In-repo golden evaluation | Prevent retrieval and answer regressions | Golden questions, expected documents, pytest eval runner, authorization leakage checks | Repeatable quality gate for every release |
-| 6A | Admin evaluation dashboard | Make answer quality visible | `/admin/evaluations`, scores, hallucination risk, notes, filters | Operators can inspect weak answers and trends |
+| 6A | In-repo golden evaluation | Prevent retrieval and answer regressions | Golden questions, expected documents, admin eval runner, authorization leakage checks | ✅ Initial version done |
+| 6A | Admin evaluation dashboard | Make answer quality visible | `/admin/evaluations`, scores, hallucination risk, notes | ✅ Initial version done |
 | 6B | User feedback loop | Capture human judgment | Thumbs up/down, optional comment, `/feedback`, `/admin/feedback` | Real user signal improves prompts, routing, and content |
 | 6B | Runtime monitoring | Debug cost, latency, cache, and failures | `/metrics/runtime`, cache hits, reranker fallbacks, ingestion counts, OpenTelemetry-ready spans | Better incident response and cost governance |
 

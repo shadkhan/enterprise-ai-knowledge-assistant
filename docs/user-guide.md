@@ -258,6 +258,7 @@ Start the frontend and backend, then open:
 | Documents | `http://localhost:3000/admin/documents` |
 | Ingestion | `http://localhost:3000/admin/ingestion` |
 | Jobs | `http://localhost:3000/admin/jobs` |
+| Evaluations | `http://localhost:3000/admin/evaluations` |
 | Users | `http://localhost:3000/admin/users` |
 | Authentication | `http://localhost:3000/admin/authentication` |
 | Settings | `http://localhost:3000/admin/settings` |
@@ -271,6 +272,7 @@ Recommended admin flow:
 2. Open `/admin/jobs` and wait for the job to complete.
 3. Open `/admin/documents` and inspect the new document chunks.
 4. Ask a question in the chat UI and verify citations.
+5. Open `/admin/evaluations` and run golden evaluations.
 
 ## 12. Test The Backend APIs
 
@@ -361,6 +363,13 @@ List ingestion jobs:
 
 ```powershell
 curl http://localhost:8000/admin/ingest/jobs `
+  -H "X-User-Id: u-admin"
+```
+
+Run golden evaluations:
+
+```powershell
+curl -X POST http://localhost:8000/admin/evaluations/run `
   -H "X-User-Id: u-admin"
 ```
 

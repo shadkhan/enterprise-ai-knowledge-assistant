@@ -1,0 +1,18 @@
+[
+  {
+    "case_id": "remote-work-policy",
+    "question": "How many days can employees work remotely?",
+    "user_id": "u-employee",
+    "expected_document_title": "Remote Work Policy",
+    "forbidden_document_titles": [],
+    "minimum_score": 0.7
+  },
+  {
+    "case_id": "hr-policy-access",
+    "question": "Summarize the remote work policy with citations.",
+    "user_id": "u-hr",
+    "expected_document_title": "Remote Work Policy",
+    "forbidden_document_titles": [],
+    "minimum_score": 0.7
+  }
+]

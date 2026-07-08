@@ -75,3 +75,29 @@ def test_admin_ingestion_jobs_endpoint_is_admin_only() -> None:
     assert forbidden.status_code == 403
     assert allowed.status_code == 200
     assert isinstance(allowed.json(), list)
+
+
+def test_admin_evaluation_endpoints() -> None:
+    client.post(
+        "/ingest",
+        headers={"X-User-Id": "u-admin"},
+        json={
+            "title": "Remote Work Policy",
+            "text": "Employees may work remotely two days per week with manager approval.",
+            "source_type": "manual",
+            "department": "Global",
+            "classification": "internal",
+            "tags": ["policy"],
+        },
+    )
+
+    run_response = client.post("/admin/evaluations/run", headers={"X-User-Id": "u-admin"})
+    list_response = client.get("/admin/evaluations", headers={"X-User-Id": "u-admin"})
+    forbidden = client.get("/admin/evaluations", headers={"X-User-Id": "u-employee"})
+
+    assert run_response.status_code == 200
+    assert run_response.json()["total_cases"] >= 1
+    assert "results" in run_response.json()
+    assert list_response.status_code == 200
+    assert list_response.json()
+    assert forbidden.status_code == 403
