@@ -12,6 +12,8 @@ import {
   Send,
   ShieldCheck,
   Sparkles,
+  ThumbsDown,
+  ThumbsUp,
   UserRound,
 } from "lucide-react";
 import {
@@ -21,6 +23,7 @@ import {
   getDocuments,
   MockUserId,
   PreferredQuality,
+  submitFeedback,
 } from "../lib/api";
 
 type ChatMessage = {
@@ -28,6 +31,8 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   response?: ChatResponse;
+  question?: string;
+  userId?: MockUserId;
   animate?: boolean;
 };
 
@@ -107,6 +112,8 @@ export function ChatShell() {
           role: "assistant",
           content: response.answer,
           response,
+          question: trimmedQuestion,
+          userId,
           animate: true,
         },
       ]);
@@ -328,6 +335,29 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
   const shouldAnimate = Boolean(message.animate && !isUser);
   const { displayedText, complete } = useTypewriter(message.content, shouldAnimate);
+  const [feedbackState, setFeedbackState] = useState<"idle" | "up" | "down" | "error">("idle");
+
+  async function sendFeedback(rating: "up" | "down") {
+    if (!message.response || !message.question || !message.userId) {
+      return;
+    }
+    try {
+      await submitFeedback(
+        {
+          question: message.question,
+          answer: message.response.answer,
+          rating,
+          citations: message.response.citations,
+          model: message.response.model,
+          provider: message.response.provider,
+        },
+        message.userId,
+      );
+      setFeedbackState(rating);
+    } catch {
+      setFeedbackState("error");
+    }
+  }
 
   return (
     <div className={`flex items-start gap-3 ${isUser ? "justify-end" : ""}`}>
@@ -342,16 +372,43 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           {shouldAnimate && !complete ? <TypingDots /> : null}
         </div>
         {message.response && complete && (
-          <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-200 pt-3 text-xs sm:grid-cols-4">
-            <Metric label="Model" value={message.response.model} />
-            <Metric label="Latency" value={`${message.response.latency_ms} ms`} />
-            <Metric label="Tokens" value={`${message.response.prompt_tokens + message.response.completion_tokens}`} />
-            <Metric label="Cost" value={`$${message.response.estimated_cost_usd}`} />
-            {message.response.semantic_cache_hit && (
-              <Metric label="Cache" value={`Semantic ${message.response.semantic_cache_score ?? ""}`} />
+          <>
+            <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-200 pt-3 text-xs sm:grid-cols-4">
+              <Metric label="Model" value={message.response.model} />
+              <Metric label="Latency" value={`${message.response.latency_ms} ms`} />
+              <Metric label="Tokens" value={`${message.response.prompt_tokens + message.response.completion_tokens}`} />
+              <Metric label="Cost" value={`$${message.response.estimated_cost_usd}`} />
+              {message.response.semantic_cache_hit && (
+                <Metric label="Cache" value={`Semantic ${message.response.semantic_cache_score ?? ""}`} />
+              )}
+            </div>
+            <div className="mt-3 flex items-center gap-2 border-t border-slate-200 pt-3 text-xs text-slate-500">
+              <span>Feedback</span>
+              <button
+                type="button"
+                onClick={() => sendFeedback("up")}
+                className={`inline-flex h-8 w-8 items-center justify-center rounded border ${
+                  feedbackState === "up" ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-600"
+                }`}
+                aria-label="Mark answer helpful"
+              >
+                <ThumbsUp size={14} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => sendFeedback("down")}
+                className={`inline-flex h-8 w-8 items-center justify-center rounded border ${
+                  feedbackState === "down" ? "border-red-300 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-600"
+                }`}
+                aria-label="Mark answer not helpful"
+              >
+                <ThumbsDown size={14} aria-hidden="true" />
+              </button>
+              {feedbackState === "error" && <span className="text-red-600">Could not save feedback</span>}
+              {feedbackState === "up" || feedbackState === "down" ? <span>Saved</span> : null}
+            </div>
+          </>
             )}
-          </div>
-        )}
       </div>
       {isUser && <Avatar role="user" />}
     </div>

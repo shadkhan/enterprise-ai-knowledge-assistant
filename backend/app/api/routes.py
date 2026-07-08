@@ -17,6 +17,7 @@ from app.observability.logging import get_logger
 from app.repositories.costs import cost_repository
 from app.repositories.documents import document_repository
 from app.repositories.evaluations import evaluation_repository
+from app.repositories.feedback import feedback_repository
 from app.retrieval.service import retrieval_service
 from app.routing.model_router import model_router
 from app.schemas.admin import (
@@ -38,6 +39,7 @@ from app.schemas.documents import (
     SyntheticIngestionJobCreate,
 )
 from app.schemas.evaluation import EvaluationRecordSummary, EvaluationRequest, EvaluationResponse, GoldenEvaluationRunResponse
+from app.schemas.feedback import FeedbackCreate, FeedbackRecordSummary, FeedbackSummary
 from app.security.guardrails import guardrails
 
 router = APIRouter()
@@ -125,6 +127,11 @@ def admin_evaluations(_: User = Depends(require_admin)) -> list[EvaluationRecord
 @router.post("/admin/evaluations/run", response_model=GoldenEvaluationRunResponse)
 def run_admin_evaluations(_: User = Depends(require_admin)) -> GoldenEvaluationRunResponse:
     return golden_evaluation_runner.run()
+
+
+@router.get("/admin/feedback", response_model=list[FeedbackRecordSummary])
+def admin_feedback(_: User = Depends(require_admin)) -> list[FeedbackRecordSummary]:
+    return feedback_repository.list_recent()
 
 
 @router.get("/admin/authentication", response_model=AuthenticationSettings)
@@ -414,11 +421,60 @@ def _to_admin_document(summary: DocumentSummary, chunk_count: int) -> AdminDocum
     )
 
 
+@router.post("/feedback", response_model=FeedbackRecordSummary)
+def create_feedback(payload: FeedbackCreate, user: User = Depends(current_user)) -> FeedbackRecordSummary:
+    record = feedback_repository.save(user.user_id, payload)
+    logger.info(
+        "feedback_recorded",
+        extra={
+            "user_id": user.user_id,
+            "rating": payload.rating,
+            "model": payload.model,
+            "provider": payload.provider,
+        },
+    )
+    return record
+
+
 @router.get("/metrics/cost")
 def cost_metrics(user: User = Depends(current_user)) -> dict:
     if "admin" not in user.roles:
         raise HTTPException(status_code=403, detail="Cost metrics require admin role")
     return cost_repository.summary()
+
+
+@router.get("/metrics/runtime")
+def runtime_metrics(user: User = Depends(current_user)) -> dict:
+    if "admin" not in user.roles:
+        raise HTTPException(status_code=403, detail="Runtime metrics require admin role")
+
+    jobs = ingestion_job_queue.list_statuses()
+    job_counts: dict[str, int] = {}
+    for job in jobs:
+        job_counts[job.status] = job_counts.get(job.status, 0) + 1
+
+    feedback_summary: FeedbackSummary = feedback_repository.summary()
+    return {
+        "documents": {
+            "count": document_repository.count_documents(),
+            "chunk_count": document_repository.count_chunks(),
+        },
+        "cost": cost_repository.summary(),
+        "evaluations": evaluation_repository.summary(),
+        "feedback": feedback_summary.model_dump(),
+        "ingestion_jobs": {
+            "retained": len(jobs),
+            "by_status": job_counts,
+        },
+        "features": {
+            "retrieval_mode": settings.retrieval_mode,
+            "reranking_enabled": settings.reranking_enabled,
+            "reranker_model": settings.reranker_model,
+            "semantic_cache_enabled": settings.semantic_cache_enabled,
+            "default_llm_provider": settings.default_llm_provider,
+            "default_embedding_provider": settings.default_embedding_provider,
+        },
+    }
 
 
 @router.post("/evaluate", response_model=EvaluationResponse)

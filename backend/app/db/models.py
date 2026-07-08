@@ -61,3 +61,16 @@ class EvaluationRecord(Base):
     hallucination_risk: Mapped[str] = mapped_column(String, nullable=False)
     notes: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class FeedbackRecord(Base):
+    __tablename__ = "feedback_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    answer: Mapped[str] = mapped_column(Text, nullable=False)
+    rating: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    comment: Mapped[str] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

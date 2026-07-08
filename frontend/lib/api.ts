@@ -126,6 +126,27 @@ export type GoldenEvaluationRunResponse = {
   }>;
 };
 
+export type FeedbackCreate = {
+  question: string;
+  answer: string;
+  rating: "up" | "down";
+  comment?: string;
+  citations: ChatResponse["citations"];
+  model?: string;
+  provider?: string;
+};
+
+export type FeedbackRecordSummary = {
+  id: number;
+  user_id: string;
+  question: string;
+  answer: string;
+  rating: "up" | "down";
+  comment?: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
 export type AuthenticationSettings = {
   mode: string;
   active_provider: string;
@@ -166,6 +187,15 @@ export type GovernanceSummary = {
   audit_events_retention_days: number;
   data_classifications: string[];
   approval_required_for: string[];
+};
+
+export type RuntimeMetrics = {
+  documents: { count: number; chunk_count: number };
+  cost: Record<string, unknown>;
+  evaluations: { total: number; high_or_medium_risk: number; average_score: number };
+  feedback: { total: number; positive: number; negative: number; positive_rate: number };
+  ingestion_jobs: { retained: number; by_status: Record<string, number> };
+  features: Record<string, unknown>;
 };
 
 async function parseError(response: Response): Promise<string> {
@@ -372,6 +402,44 @@ export async function runGoldenEvaluations(): Promise<GoldenEvaluationRunRespons
 
   if (!response.ok) {
     throw new Error(`Evaluation run failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function submitFeedback(payload: FeedbackCreate, userId: MockUserId = "u-employee"): Promise<FeedbackRecordSummary> {
+  const response = await fetch(`${API_BASE_URL}/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-User-Id": userId },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Feedback request failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function getAdminFeedback(): Promise<FeedbackRecordSummary[]> {
+  const response = await fetch(`${API_BASE_URL}/admin/feedback`, {
+    headers: { "X-User-Id": "u-admin" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Admin feedback request failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function getRuntimeMetrics(): Promise<RuntimeMetrics> {
+  const response = await fetch(`${API_BASE_URL}/metrics/runtime`, {
+    headers: { "X-User-Id": "u-admin" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Runtime metrics request failed: ${await parseError(response)}`);
   }
 
   return response.json();

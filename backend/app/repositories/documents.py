@@ -170,6 +170,10 @@ class DocumentRepository:
         with SessionLocal() as session:
             return len(session.scalars(select(DocumentRecord.id)).all())
 
+    def count_chunks(self) -> int:
+        with SessionLocal() as session:
+            return len(session.scalars(select(DocumentChunkRecord.id)).all())
+
     def _to_summary(self, record: DocumentRecord) -> DocumentSummary:
         metadata = record.metadata_json or {}
         return DocumentSummary(

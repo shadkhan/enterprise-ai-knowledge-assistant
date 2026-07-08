@@ -218,8 +218,8 @@ The next planned evaluation layer is a control plane with four parts:
 | --- | --- | --- | --- | --- |
 | Offline evaluation | Golden question datasets and repeatable tests | Catch retrieval, citation, and access-control regressions before release | Store golden cases in the repo and run them through pytest | Quality gates become part of CI |
 | Online evaluation | Score real answers after generation | Detect hallucination and weak citations in live usage | Persist groundedness, citation, uncertainty, and evaluator notes | Admins can review risky answers |
-| Monitoring | Track latency, cost, cache, reranker, and ingestion behavior | Make production behavior observable | Add runtime metrics and OpenTelemetry-ready spans | Faster debugging and cost governance |
-| User feedback | Capture thumbs up/down and comments | Add human judgment to automated checks | Store feedback and expose an admin review queue | Better prompts, retrieval tuning, and content fixes |
+| Monitoring | Track cost, documents, evaluations, feedback, feature flags, and ingestion behavior | Make production behavior observable | `/metrics/runtime` and `/admin/monitoring` | Faster debugging and cost governance |
+| User feedback | Capture thumbs up/down and comments | Add human judgment to automated checks | Store feedback and expose `/admin/feedback` | Better prompts, retrieval tuning, and content fixes |
 
 We do not just build RAG. We measure retrieval quality, answer groundedness, citations, access-control leakage, latency, cost, and user feedback.
 

@@ -39,5 +39,13 @@ class EvaluationRepository:
                 for record in records
             ]
 
+    def summary(self) -> dict:
+        with SessionLocal() as session:
+            records = session.scalars(select(EvaluationRecord)).all()
+        total = len(records)
+        high_risk = sum(1 for record in records if record.hallucination_risk in {"high", "medium"})
+        average_score = round(sum(record.score for record in records) / total, 4) if total else 0.0
+        return {"total": total, "high_or_medium_risk": high_risk, "average_score": average_score}
+
 
 evaluation_repository = EvaluationRepository()

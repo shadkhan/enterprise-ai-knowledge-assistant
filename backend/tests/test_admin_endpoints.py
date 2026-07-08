@@ -101,3 +101,30 @@ def test_admin_evaluation_endpoints() -> None:
     assert list_response.status_code == 200
     assert list_response.json()
     assert forbidden.status_code == 403
+
+
+def test_feedback_and_runtime_metrics() -> None:
+    feedback_response = client.post(
+        "/feedback",
+        headers={"X-User-Id": "u-employee"},
+        json={
+            "question": "How many days can employees work remotely?",
+            "answer": "Employees may work remotely two days per week.",
+            "rating": "up",
+            "comment": "Helpful",
+            "citations": [],
+            "model": "cheap-fast-model",
+            "provider": "mock",
+        },
+    )
+    admin_feedback_response = client.get("/admin/feedback", headers={"X-User-Id": "u-admin"})
+    runtime_response = client.get("/metrics/runtime", headers={"X-User-Id": "u-admin"})
+    forbidden_runtime = client.get("/metrics/runtime", headers={"X-User-Id": "u-employee"})
+
+    assert feedback_response.status_code == 200
+    assert feedback_response.json()["rating"] == "up"
+    assert admin_feedback_response.status_code == 200
+    assert admin_feedback_response.json()
+    assert runtime_response.status_code == 200
+    assert runtime_response.json()["feedback"]["total"] >= 1
+    assert forbidden_runtime.status_code == 403

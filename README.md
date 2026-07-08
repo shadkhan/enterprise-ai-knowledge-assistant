@@ -358,7 +358,7 @@ curl http://localhost:8000/ingest/jobs/{job_id} \
 | Phase 3 | Retrieval Quality | 🟡 Started | Add embeddings, hybrid retrieval, reranking, and citation precision |
 | Phase 4 | LLM Providers And Streaming | 🟡 Started | Add real model providers and streamed responses |
 | Phase 5 | Enterprise Security And Governance | ⏳ Planned | Add SSO, ABAC, ACL sync, DLP, and audit logging |
-| Phase 6 | Observability, Evaluation, And Cost Controls | ⏳ Planned | Add traces, quality gates, budgets, feedback, and dashboards |
+| Phase 6 | Observability, Evaluation, And Cost Controls | 🟡 Started | Add traces, quality gates, budgets, feedback, and dashboards |
 | Phase 7 | Admin And Knowledge Operations UI | 🟡 Started | Add document management, ingestion monitoring, and operator workflows |
 | Phase 8 | Multi-Agent Workflows | ⏳ Planned | Add governed multi-step research and enterprise actions |
 
@@ -485,15 +485,15 @@ curl http://localhost:8000/ingest/jobs/{job_id} \
 | --- | --- | --- |
 | Phase 6A in-repo evaluation | ✅ Done | Golden questions, admin eval runner, retrieval/citation/access checks |
 | Phase 6A admin quality dashboard | ✅ Done | `/admin/evaluations` for scores, risk, and notes |
-| Phase 6B user feedback | ⏳ Planned | Thumbs up/down, comments, and review queue |
-| Phase 6B runtime metrics | ⏳ Planned | Cache hits, reranker status, latency, job counts, and model cost |
+| Phase 6B user feedback | ✅ Done | Thumbs up/down, persisted records, and admin review queue |
+| Phase 6B runtime metrics | ✅ Done | Runtime endpoint and monitoring page for cost, jobs, docs, evals, feedback, and feature flags |
 | OpenTelemetry traces | ⏳ Planned | End-to-end request visibility |
 | Request/retrieval/LLM/evaluation spans | ⏳ Planned | Debug latency and failures |
 | Metrics dashboard data model | ⏳ Planned | Persist dashboard-ready aggregates |
 | Golden evaluation datasets | ✅ Done | Initial in-repo regression dataset |
 | Groundedness scoring | ⏳ Planned | Detect unsupported answers |
 | Citation precision scoring | ⏳ Planned | Check cited source relevance |
-| User feedback capture | ⏳ Planned | Improve quality loops |
+| User feedback capture | ✅ Done | Chat feedback buttons plus `/admin/feedback` review queue |
 | Department budgets | ⏳ Planned | Cost governance |
 | Rate limits and quotas | ⏳ Planned | Abuse and spend control |
 
@@ -503,7 +503,7 @@ curl http://localhost:8000/ingest/jobs/{job_id} \
 | --- | --- | --- | --- | --- |
 | Offline evaluation | Golden datasets and repeatable eval tests | Catch retrieval and answer regressions before release | Add `data/evaluation/golden_questions.json`, pytest eval runner, expected document checks, and leakage tests | Safer changes and measurable retrieval quality |
 | Online evaluation | Score real answers after generation | Detect hallucination, weak citations, and low-confidence answers in use | Store groundedness, citation, uncertainty, and evaluator notes per response | Admins can find quality problems quickly |
-| Monitoring | Runtime metrics for cost, latency, cache, reranking, and jobs | Keep production behavior visible and debuggable | Add `/metrics/runtime`, OpenTelemetry-ready spans, cache hit counters, reranker fallback counters, and ingestion job counts | Faster incident diagnosis and cost control |
+| Monitoring | Runtime metrics for cost, docs, evals, feedback, feature flags, and jobs | Keep production behavior visible and debuggable | Add `/metrics/runtime` and `/admin/monitoring` | Faster incident diagnosis and cost control |
 | User feedback | Capture thumbs up/down and comments | Human feedback finds issues automated checks miss | Add chat feedback actions, `/feedback`, and `/admin/feedback` review page | Feedback loop for routing, prompts, retrieval, and content fixes |
 
 We do not just build RAG. We measure retrieval quality, answer groundedness, citations, access-control leakage, latency, cost, and user feedback.

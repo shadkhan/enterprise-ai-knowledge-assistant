@@ -63,7 +63,7 @@ Track source version, updated timestamp, deletion status, and connector sync cur
 
 Use offline golden datasets, groundedness checks, citation precision, answer completeness, human feedback, and production monitoring by question category.
 
-In this project, Phase 6A is now implemented with an in-repo golden dataset, an admin-triggered evaluation runner, expected-document checks, citation checks, access-control leakage checks, persisted evaluation records, and an `/admin/evaluations` dashboard. Phase 6B will add user feedback, an admin feedback review queue, runtime metrics, and monitoring dashboards. Later, tools like RAGAS, DeepEval, promptfoo, Langfuse, Arize Phoenix, OpenTelemetry, Prometheus, or Grafana can be plugged in without changing the core RAG flow.
+In this project, Phase 6A is now implemented with an in-repo golden dataset, an admin-triggered evaluation runner, expected-document checks, citation checks, access-control leakage checks, persisted evaluation records, and an `/admin/evaluations` dashboard. Phase 6B is also implemented with chat feedback buttons, persisted feedback records, `/admin/feedback`, `/metrics/runtime`, and `/admin/monitoring`. Later, tools like RAGAS, DeepEval, promptfoo, Langfuse, Arize Phoenix, OpenTelemetry, Prometheus, or Grafana can be plugged in without changing the core RAG flow.
 
 ### What happens if retrieval finds nothing?
 

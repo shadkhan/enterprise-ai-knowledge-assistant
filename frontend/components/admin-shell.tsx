@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { BarChart3, ClipboardCheck, Database, FilePlus2, KeyRound, ListChecks, Settings, ShieldCheck, UsersRound } from "lucide-react";
+import { BarChart3, ClipboardCheck, Database, FilePlus2, HeartPulse, KeyRound, ListChecks, MessageSquare, Settings, ShieldCheck, UsersRound } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Overview", icon: BarChart3 },
@@ -11,6 +11,8 @@ const NAV_ITEMS = [
   { href: "/admin/ingestion", label: "Ingestion", icon: FilePlus2 },
   { href: "/admin/jobs", label: "Jobs", icon: ListChecks },
   { href: "/admin/evaluations", label: "Evaluations", icon: ClipboardCheck },
+  { href: "/admin/feedback", label: "Feedback", icon: MessageSquare },
+  { href: "/admin/monitoring", label: "Monitoring", icon: HeartPulse },
   { href: "/admin/users", label: "Users", icon: UsersRound },
   { href: "/admin/authentication", label: "Authentication", icon: KeyRound },
   { href: "/admin/settings", label: "Settings", icon: Settings },
