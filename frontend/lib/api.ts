@@ -16,6 +16,7 @@ export type UserProfile = {
 };
 
 export type ChatResponse = {
+  conversation_id?: string | null;
   answer: string;
   citations: Array<{
     document_id: string;
@@ -35,6 +36,36 @@ export type ChatResponse = {
   semantic_cache_hit: boolean;
   semantic_cache_score?: number | null;
   semantic_cache_source_question?: string | null;
+};
+
+export type ConversationSummary = {
+  conversation_id: string;
+  title: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+  latest_message?: string | null;
+};
+
+export type ConversationMessageSummary = {
+  id: number;
+  role: "user" | "assistant" | string;
+  content: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ConversationDetail = ConversationSummary & {
+  messages: ConversationMessageSummary[];
+};
+
+export type CitationPreview = {
+  document_id: string;
+  title: string;
+  chunk_id: string;
+  text: string;
+  score?: number | null;
+  metadata: Record<string, unknown>;
 };
 
 export type DocumentSummary = {
@@ -91,6 +122,12 @@ export type IngestionJobStatus = {
   document_count: number;
   error?: string | null;
   result_document_ids: string[];
+};
+
+export type FileIngestionSettings = {
+  watch_folder: string;
+  archive_folder?: string | null;
+  allowed_extensions: string[];
 };
 
 export type EvaluationRecordSummary = {
@@ -248,7 +285,7 @@ async function parseError(response: Response): Promise<string> {
 
 export async function askQuestion(
   question: string,
-  options: { userId?: MockUserId; preferredQuality?: PreferredQuality; topK?: number } = {},
+  options: { userId?: MockUserId; preferredQuality?: PreferredQuality; topK?: number; conversationId?: string | null } = {},
 ): Promise<ChatResponse> {
   const response = await fetch(`${API_BASE_URL}/chat`, {
     method: "POST",
@@ -260,6 +297,7 @@ export async function askQuestion(
       question,
       preferred_quality: options.preferredQuality ?? "balanced",
       top_k: options.topK ?? 5,
+      conversation_id: options.conversationId ?? null,
     }),
   });
 
@@ -270,8 +308,61 @@ export async function askQuestion(
   return response.json();
 }
 
-export async function getDocuments(userId: MockUserId = "u-employee"): Promise<DocumentSummary[]> {
-  const response = await fetch(`${API_BASE_URL}/documents`, {
+export async function getConversations(
+  userId: MockUserId = "u-employee",
+  options: { limit?: number; offset?: number } = {},
+): Promise<ConversationSummary[]> {
+  const params = new URLSearchParams({
+    limit: String(options.limit ?? 20),
+    offset: String(options.offset ?? 0),
+  });
+  const response = await fetch(`${API_BASE_URL}/chat/sessions?${params}`, {
+    headers: { "X-User-Id": userId },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Conversations request failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function getConversation(
+  conversationId: string,
+  userId: MockUserId = "u-employee",
+): Promise<ConversationDetail> {
+  const response = await fetch(`${API_BASE_URL}/chat/sessions/${conversationId}`, {
+    headers: { "X-User-Id": userId },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Conversation request failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function getCitationPreview(chunkId: string, userId: MockUserId = "u-employee"): Promise<CitationPreview> {
+  const response = await fetch(`${API_BASE_URL}/documents/chunks/${chunkId}`, {
+    headers: { "X-User-Id": userId },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Citation preview request failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function getDocuments(
+  userId: MockUserId = "u-employee",
+  options: { limit?: number; offset?: number } = {},
+): Promise<DocumentSummary[]> {
+  const params = new URLSearchParams({
+    limit: String(options.limit ?? 20),
+    offset: String(options.offset ?? 0),
+  });
+  const response = await fetch(`${API_BASE_URL}/documents?${params}`, {
     headers: { "X-User-Id": userId },
   });
 
@@ -354,8 +445,12 @@ export async function getGovernanceSummary(): Promise<GovernanceSummary> {
   return response.json();
 }
 
-export async function getAdminDocuments(): Promise<AdminDocumentSummary[]> {
-  const response = await fetch(`${API_BASE_URL}/admin/documents`, {
+export async function getAdminDocuments(options: { limit?: number; offset?: number } = {}): Promise<AdminDocumentSummary[]> {
+  const params = new URLSearchParams({
+    limit: String(options.limit ?? 50),
+    offset: String(options.offset ?? 0),
+  });
+  const response = await fetch(`${API_BASE_URL}/admin/documents?${params}`, {
     headers: { "X-User-Id": "u-admin" },
   });
 
@@ -401,6 +496,76 @@ export async function createSyntheticJob(synthetic: SyntheticContentRequest): Pr
 
   if (!response.ok) {
     throw new Error(`Synthetic job request failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function uploadIngestionFiles(
+  files: File[],
+  options: {
+    department: string;
+    classification: DocumentCreate["classification"];
+    tags: string[];
+    generateEmbeddings?: boolean;
+  },
+): Promise<DocumentSummary[]> {
+  const form = new FormData();
+  files.forEach((file) => form.append("files", file));
+  form.append("department", options.department);
+  form.append("classification", options.classification);
+  form.append("tags", options.tags.join(","));
+  form.append("generate_embeddings", String(options.generateEmbeddings ?? true));
+
+  const response = await fetch(`${API_BASE_URL}/ingest/files`, {
+    method: "POST",
+    headers: { "X-User-Id": "u-admin" },
+    body: form,
+  });
+
+  if (!response.ok) {
+    throw new Error(`File upload failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function createFolderIngestionJob(folder: {
+  folder_path?: string | null;
+  department: string;
+  classification: DocumentCreate["classification"];
+  tags: string[];
+  generate_embeddings?: boolean;
+  archive_after_ingest?: boolean;
+  max_files?: number;
+}): Promise<IngestionJobStatus> {
+  const response = await fetch(`${API_BASE_URL}/ingest/folder/jobs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-User-Id": "u-admin" },
+    body: JSON.stringify({
+      folder: {
+        ...folder,
+        generate_embeddings: folder.generate_embeddings ?? true,
+        archive_after_ingest: folder.archive_after_ingest ?? false,
+        max_files: folder.max_files ?? 25,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Folder ingestion job failed: ${await parseError(response)}`);
+  }
+
+  return response.json();
+}
+
+export async function getFileIngestionSettings(): Promise<FileIngestionSettings> {
+  const response = await fetch(`${API_BASE_URL}/admin/ingestion/settings`, {
+    headers: { "X-User-Id": "u-admin" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`File ingestion settings request failed: ${await parseError(response)}`);
   }
 
   return response.json();

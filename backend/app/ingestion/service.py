@@ -3,11 +3,12 @@ from uuid import uuid4
 from app.cache import retrieval_cache, semantic_cache
 from app.embeddings import get_embedding_provider
 from app.ingestion.chunking import chunk_llama_document
+from app.ingestion.folder_scan import archive_ingested_file, build_documents_from_folder
 from app.ingestion.metadata import extract_metadata
 from app.ingestion.normalization import to_llama_document
 from app.ingestion.synthetic import synthetic_content_factory
 from app.repositories.documents import document_repository
-from app.schemas.documents import DocumentChunk, DocumentCreate, DocumentSummary, SyntheticContentRequest
+from app.schemas.documents import DocumentChunk, DocumentCreate, DocumentSummary, FolderIngestionRequest, SyntheticContentRequest
 
 
 class IngestionService:
@@ -53,8 +54,20 @@ class IngestionService:
             summaries.extend(self.ingest(document, owner_id=owner_id, generate_embeddings=generate_embeddings))
         return summaries
 
-    def list_documents(self) -> list[DocumentSummary]:
-        return document_repository.list_documents()
+    def ingest_folder(
+        self,
+        payload: FolderIngestionRequest,
+        owner_id: str,
+    ) -> list[DocumentSummary]:
+        summaries: list[DocumentSummary] = []
+        for document, path in build_documents_from_folder(payload):
+            summaries.extend(self.ingest(document, owner_id=owner_id, generate_embeddings=payload.generate_embeddings))
+            if payload.archive_after_ingest:
+                archive_ingested_file(path)
+        return summaries
+
+    def list_documents(self, limit: int | None = None, offset: int = 0) -> list[DocumentSummary]:
+        return document_repository.list_documents(limit=limit, offset=offset)
 
     def list_chunks(self) -> list[tuple[DocumentSummary, DocumentChunk]]:
         return document_repository.list_chunks()

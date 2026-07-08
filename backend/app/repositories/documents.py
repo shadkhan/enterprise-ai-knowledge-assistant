@@ -2,6 +2,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import selectinload
 
 from app.auth.rbac import User
+from app.core.config import settings
 from app.db.models import DocumentChunkRecord, DocumentRecord
 from app.db.session import SessionLocal, is_postgres
 from app.schemas.retrieval import RetrievedChunk
@@ -35,9 +36,12 @@ class DocumentRepository:
                 self._store_pgvector_embeddings(session, chunks)
             session.commit()
 
-    def list_documents(self) -> list[DocumentSummary]:
+    def list_documents(self, limit: int | None = None, offset: int = 0) -> list[DocumentSummary]:
         with SessionLocal() as session:
-            records = session.scalars(select(DocumentRecord).order_by(DocumentRecord.created_at.desc())).all()
+            statement = select(DocumentRecord).order_by(DocumentRecord.created_at.desc()).offset(offset)
+            if limit is not None:
+                statement = statement.limit(limit)
+            records = session.scalars(statement).all()
             return [self._to_summary(record) for record in records]
 
     def list_chunks(self) -> list[tuple[DocumentSummary, DocumentChunk]]:
@@ -64,13 +68,17 @@ class DocumentRepository:
                 )
             return pairs
 
-    def list_admin_documents(self) -> list[tuple[DocumentSummary, int]]:
+    def list_admin_documents(self, limit: int | None = None, offset: int = 0) -> list[tuple[DocumentSummary, int]]:
         with SessionLocal() as session:
-            records = session.scalars(
+            statement = (
                 select(DocumentRecord)
                 .options(selectinload(DocumentRecord.chunks))
                 .order_by(DocumentRecord.created_at.desc())
-            ).all()
+                .offset(offset)
+            )
+            if limit is not None:
+                statement = statement.limit(limit)
+            records = session.scalars(statement).all()
             return [(self._to_summary(record), len(record.chunks)) for record in records]
 
     def get_document_detail(self, document_id: str) -> tuple[DocumentSummary, list[DocumentChunk]] | None:
@@ -93,8 +101,27 @@ class DocumentRepository:
                 ],
             )
 
+    def get_chunk(self, chunk_id: str) -> tuple[DocumentSummary, DocumentChunk] | None:
+        with SessionLocal() as session:
+            chunk = session.scalar(
+                select(DocumentChunkRecord)
+                .options(selectinload(DocumentChunkRecord.document))
+                .where(DocumentChunkRecord.id == chunk_id)
+            )
+            if not chunk:
+                return None
+            return (
+                self._to_summary(chunk.document),
+                DocumentChunk(
+                    chunk_id=chunk.id,
+                    document_id=chunk.document_id,
+                    text=chunk.body,
+                    embedding=(chunk.metadata_json or {}).get("embedding"),
+                ),
+            )
+
     def vector_search(self, query_embedding: list[float], user: User, top_k: int) -> list[RetrievedChunk]:
-        if not is_postgres:
+        if not is_postgres or len(query_embedding) != self._pgvector_dimensions():
             return self._metadata_vector_search(query_embedding, user, top_k)
 
         embedding_literal = self._vector_literal(query_embedding)
@@ -191,10 +218,15 @@ class DocumentRepository:
         for chunk in chunks:
             if not chunk.embedding:
                 continue
+            if len(chunk.embedding) != self._pgvector_dimensions():
+                continue
             session.execute(
                 text("UPDATE document_chunks SET embedding = CAST(:embedding AS vector) WHERE id = :chunk_id"),
                 {"embedding": self._vector_literal(chunk.embedding), "chunk_id": chunk.chunk_id},
             )
+
+    def _pgvector_dimensions(self) -> int:
+        return settings.embedding_dimensions
 
     def _vector_literal(self, embedding: list[float]) -> str:
         return "[" + ",".join(str(round(float(value), 6)) for value in embedding) + "]"

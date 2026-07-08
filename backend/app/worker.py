@@ -4,7 +4,7 @@ from redis.exceptions import RedisError
 from sqlalchemy.exc import OperationalError
 
 from app.db import init_db
-from app.ingestion.jobs import document_from_job, ingestion_job_queue, synthetic_from_job
+from app.ingestion.jobs import document_from_job, folder_from_job, ingestion_job_queue, synthetic_from_job
 from app.ingestion.service import ingestion_service
 from app.observability.logging import configure_logging, get_logger
 
@@ -33,6 +33,9 @@ def process_job(job: dict) -> None:
                 owner_id=owner_id,
                 generate_embeddings=payload.get("generate_embeddings", True),
             )
+        elif job["job_type"] == "folder":
+            folder = folder_from_job(payload["folder"])
+            docs = ingestion_service.ingest_folder(folder, owner_id=owner_id)
         else:
             raise ValueError(f"Unsupported job type: {job['job_type']}")
 

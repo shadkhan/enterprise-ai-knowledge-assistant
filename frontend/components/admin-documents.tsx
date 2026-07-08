@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { UIEvent } from "react";
 import { RefreshCw, Search } from "lucide-react";
 import { AdminDocumentDetail, AdminDocumentSummary, getAdminDocumentDetail, getAdminDocuments } from "../lib/api";
 import { AdminShell, EmptyState, ErrorBanner, StatusBadge } from "./admin-shell";
@@ -12,7 +13,10 @@ export function AdminDocuments() {
   const [department, setDepartment] = useState("all");
   const [classification, setClassification] = useState("all");
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const pageSize = 30;
 
   useEffect(() => {
     refresh();
@@ -21,10 +25,34 @@ export function AdminDocuments() {
   function refresh() {
     setLoading(true);
     setError(null);
-    getAdminDocuments()
-      .then(setDocuments)
+    getAdminDocuments({ limit: pageSize, offset: 0 })
+      .then((page) => {
+        setDocuments(page);
+        setHasMore(page.length === pageSize);
+      })
       .catch((err) => setError(err instanceof Error ? err.message : "Documents request failed"))
       .finally(() => setLoading(false));
+  }
+
+  function loadMore() {
+    if (loadingMore || !hasMore || query || department !== "all" || classification !== "all") {
+      return;
+    }
+    setLoadingMore(true);
+    getAdminDocuments({ limit: pageSize, offset: documents.length })
+      .then((page) => {
+        setDocuments((current) => [...current, ...page]);
+        setHasMore(page.length === pageSize);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Documents request failed"))
+      .finally(() => setLoadingMore(false));
+  }
+
+  function maybeLoadMore(event: UIEvent<HTMLDivElement>) {
+    const target = event.currentTarget;
+    if (target.scrollTop + target.clientHeight >= target.scrollHeight - 80) {
+      loadMore();
+    }
   }
 
   function openDocument(documentId: string) {
@@ -81,7 +109,7 @@ export function AdminDocuments() {
           {error && <ErrorBanner message={error} />}
           {!loading && filtered.length === 0 && <EmptyState message="No documents match the current filters." />}
 
-          <div className="grid gap-3">
+          <div className="grid max-h-[calc(100vh-14rem)] gap-3 overflow-y-auto pr-1" onScroll={maybeLoadMore}>
             {filtered.map((doc) => (
               <button
                 key={doc.document_id}
@@ -107,6 +135,10 @@ export function AdminDocuments() {
                 </div>
               </button>
             ))}
+            {loadingMore && <div className="rounded border border-slate-200 bg-white p-4 text-sm text-slate-500">Loading more documents...</div>}
+            {!hasMore && documents.length > 0 && !query && department === "all" && classification === "all" && (
+              <div className="rounded border border-slate-200 bg-white p-4 text-sm text-slate-500">End of document list.</div>
+            )}
           </div>
         </section>
 

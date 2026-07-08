@@ -1,14 +1,16 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactNode, UIEvent } from "react";
 import {
   AlertCircle,
   Bot,
   CheckCircle2,
+  Clock3,
   Database,
   FileText,
   Loader2,
+  MessageSquarePlus,
   Send,
   ShieldCheck,
   Sparkles,
@@ -19,7 +21,12 @@ import {
 import {
   askQuestion,
   ChatResponse,
+  CitationPreview,
+  ConversationSummary,
   DocumentSummary,
+  getCitationPreview,
+  getConversation,
+  getConversations,
   getDocuments,
   MockUserId,
   PreferredQuality,
@@ -50,6 +57,8 @@ const SUGGESTIONS = [
   "What information can I access as this user?",
 ];
 
+const SIDEBAR_PAGE_SIZE = 8;
+
 export function ChatShell() {
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -63,8 +72,18 @@ export function ChatShell() {
   const [userId, setUserId] = useState<MockUserId>("u-employee");
   const [quality, setQuality] = useState<PreferredQuality>("balanced");
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [selectedCitation, setSelectedCitation] = useState<CitationPreview | null>(null);
+  const [citationLoading, setCitationLoading] = useState(false);
+  const [citationError, setCitationError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [documentsLoadingMore, setDocumentsLoadingMore] = useState(false);
+  const [documentsHasMore, setDocumentsHasMore] = useState(true);
+  const [conversationsLoading, setConversationsLoading] = useState(false);
+  const [conversationsLoadingMore, setConversationsLoadingMore] = useState(false);
+  const [conversationsHasMore, setConversationsHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -78,12 +97,107 @@ export function ChatShell() {
   }, [messages, loading]);
 
   useEffect(() => {
-    setDocumentsLoading(true);
-    getDocuments(userId)
-      .then(setDocuments)
-      .catch(() => setDocuments([]))
-      .finally(() => setDocumentsLoading(false));
+    loadDocumentsPage(true);
+    loadConversationsPage(true);
+    setCurrentConversationId(null);
+    setSelectedCitation(null);
   }, [userId]);
+
+  async function loadDocumentsPage(reset = false) {
+    if (!reset && (!documentsHasMore || documentsLoadingMore)) {
+      return;
+    }
+    reset ? setDocumentsLoading(true) : setDocumentsLoadingMore(true);
+    const offset = reset ? 0 : documents.length;
+    try {
+      const page = await getDocuments(userId, { limit: SIDEBAR_PAGE_SIZE, offset });
+      setDocuments((current) => (reset ? page : [...current, ...page]));
+      setDocumentsHasMore(page.length === SIDEBAR_PAGE_SIZE);
+    } catch {
+      if (reset) {
+        setDocuments([]);
+      }
+      setDocumentsHasMore(false);
+    } finally {
+      reset ? setDocumentsLoading(false) : setDocumentsLoadingMore(false);
+    }
+  }
+
+  async function loadConversationsPage(reset = false) {
+    if (!reset && (!conversationsHasMore || conversationsLoadingMore)) {
+      return;
+    }
+    reset ? setConversationsLoading(true) : setConversationsLoadingMore(true);
+    const offset = reset ? 0 : conversations.length;
+    try {
+      const page = await getConversations(userId, { limit: SIDEBAR_PAGE_SIZE, offset });
+      setConversations((current) => (reset ? page : [...current, ...page]));
+      setConversationsHasMore(page.length === SIDEBAR_PAGE_SIZE);
+    } catch {
+      if (reset) {
+        setConversations([]);
+      }
+      setConversationsHasMore(false);
+    } finally {
+      reset ? setConversationsLoading(false) : setConversationsLoadingMore(false);
+    }
+  }
+
+  function loadMoreOnScroll(event: UIEvent<HTMLDivElement>, callback: () => void) {
+    const target = event.currentTarget;
+    if (target.scrollTop + target.clientHeight >= target.scrollHeight - 48) {
+      callback();
+    }
+  }
+
+  function startNewConversation() {
+    setCurrentConversationId(null);
+    setSelectedCitation(null);
+    setMessages([
+      {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: "New conversation started. Ask a question and I will keep the thread together.",
+      },
+    ]);
+  }
+
+  async function loadConversation(conversationId: string) {
+    setError(null);
+    setLoading(true);
+    try {
+      const conversation = await getConversation(conversationId, userId);
+      setCurrentConversationId(conversation.conversation_id);
+      setSelectedCitation(null);
+      setMessages(
+        conversation.messages.map((message) => ({
+          id: String(message.id),
+          role: message.role === "user" ? "user" : "assistant",
+          content: message.content,
+        })),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load conversation.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function openCitation(chunkId: string) {
+    setCitationLoading(true);
+    setCitationError(null);
+    try {
+      setSelectedCitation(await getCitationPreview(chunkId, userId));
+    } catch (err) {
+      setCitationError(err instanceof Error ? err.message : "Could not load citation source.");
+    } finally {
+      setCitationLoading(false);
+    }
+  }
+
+  async function refreshConversations() {
+    loadConversationsPage(true);
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -104,7 +218,13 @@ export function ChatShell() {
     setMessages((current) => [...current, userMessage]);
 
     try {
-      const response = await askQuestion(trimmedQuestion, { userId, preferredQuality: quality, topK: 5 });
+      const response = await askQuestion(trimmedQuestion, {
+        userId,
+        preferredQuality: quality,
+        topK: 5,
+        conversationId: currentConversationId,
+      });
+      setCurrentConversationId(response.conversation_id ?? currentConversationId);
       setMessages((current) => [
         ...current,
         {
@@ -117,6 +237,7 @@ export function ChatShell() {
           animate: true,
         },
       ]);
+      refreshConversations();
     } catch (err) {
       const message = err instanceof Error ? err.message : "The chat request failed.";
       setError(message);
@@ -194,6 +315,58 @@ export function ChatShell() {
           </section>
 
           <section className="mt-7">
+            <div className="flex items-center justify-between gap-3">
+              <PanelLabel>Conversations</PanelLabel>
+              <button
+                type="button"
+                onClick={startNewConversation}
+                className="inline-flex h-8 w-8 items-center justify-center rounded border border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500"
+                aria-label="Start new conversation"
+              >
+                <MessageSquarePlus size={15} aria-hidden="true" />
+              </button>
+            </div>
+            <div
+              className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1"
+              onScroll={(event) => loadMoreOnScroll(event, () => loadConversationsPage(false))}
+            >
+              {conversationsLoading ? (
+                <div className="rounded border border-slate-700 bg-slate-900 px-3 py-3 text-xs text-slate-400">
+                  Loading chats...
+                </div>
+              ) : conversations.length ? (
+                conversations.map((conversation) => (
+                  <button
+                    key={conversation.conversation_id}
+                    type="button"
+                    onClick={() => loadConversation(conversation.conversation_id)}
+                    className={`w-full rounded border px-3 py-2 text-left transition ${
+                      currentConversationId === conversation.conversation_id
+                        ? "border-emerald-300 bg-emerald-300 text-slate-950"
+                        : "border-slate-700 bg-slate-900 text-slate-100 hover:border-slate-500"
+                    }`}
+                  >
+                    <span className="block truncate text-xs font-medium">{conversation.title}</span>
+                    <span className={`mt-1 flex items-center gap-1 text-[11px] ${currentConversationId === conversation.conversation_id ? "text-slate-700" : "text-slate-400"}`}>
+                      <Clock3 size={12} aria-hidden="true" />
+                      {new Date(conversation.updated_at).toLocaleString()}
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <div className="rounded border border-slate-700 bg-slate-900 px-3 py-3 text-xs text-slate-400">
+                  Recent chats appear here.
+                </div>
+              )}
+              {conversationsLoadingMore && (
+                <div className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-400">
+                  Loading more...
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="mt-7">
             <PanelLabel>Try These</PanelLabel>
             <div className="mt-3 space-y-2">
               {SUGGESTIONS.map((suggestion) => (
@@ -227,7 +400,7 @@ export function ChatShell() {
           <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
             <div className="mx-auto flex max-w-3xl flex-col gap-4">
               {messages.map((message) => (
-                <MessageBubble key={message.id} message={message} />
+                <MessageBubble key={message.id} message={message} onCitationSelect={openCitation} />
               ))}
 
               {loading && (
@@ -289,39 +462,81 @@ export function ChatShell() {
         <aside className="border-t border-slate-200 bg-slate-50 px-5 py-5 lg:border-l lg:border-t-0">
           <section>
             <div className="flex items-center gap-2">
-              <Database size={18} className="text-slate-600" aria-hidden="true" />
-              <h2 className="text-sm font-semibold">Visible Documents</h2>
-            </div>
-            <div className="mt-3 space-y-2">
-              {documentsLoading ? (
-                <PanelEmpty label="Loading documents..." />
-              ) : documents.length ? (
-                documents.map((document) => <DocumentCard key={document.document_id} document={document} />)
-              ) : (
-                <PanelEmpty label="No documents visible for this user." />
-              )}
-            </div>
-          </section>
-
-          <section className="mt-7">
-            <div className="flex items-center gap-2">
               <FileText size={18} className="text-slate-600" aria-hidden="true" />
               <h2 className="text-sm font-semibold">Latest Sources</h2>
             </div>
             <div className="mt-3 space-y-2">
               {latestResponse?.citations.length ? (
                 latestResponse.citations.map((citation) => (
-                  <div key={citation.chunk_id} className="rounded border border-slate-200 bg-white p-3">
+                  <button
+                    key={citation.chunk_id}
+                    type="button"
+                    onClick={() => openCitation(citation.chunk_id)}
+                    className="w-full rounded border border-slate-200 bg-white p-3 text-left hover:border-slate-400"
+                  >
                     <div className="text-sm font-medium text-slate-950">{citation.title}</div>
                     <div className="mt-1 truncate text-xs text-slate-500">{citation.document_id}</div>
                     <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
                       <span>{citation.chunk_id}</span>
                       <span>{Math.round(citation.score * 100)}%</span>
                     </div>
-                  </div>
+                  </button>
                 ))
               ) : (
                 <PanelEmpty label="Citations appear after an answer." />
+              )}
+            </div>
+          </section>
+
+          <section className="mt-7">
+            <div className="flex items-center gap-2">
+              <ShieldCheck size={18} className="text-slate-600" aria-hidden="true" />
+              <h2 className="text-sm font-semibold">Source Preview</h2>
+            </div>
+            <div className="mt-3">
+              {citationLoading ? (
+                <PanelEmpty label="Loading source..." />
+              ) : citationError ? (
+                <div className="rounded border border-red-200 bg-red-50 px-3 py-4 text-sm text-red-700">{citationError}</div>
+              ) : selectedCitation ? (
+                <div className="rounded border border-slate-200 bg-white p-3">
+                  <div className="text-sm font-semibold text-slate-950">{selectedCitation.title}</div>
+                  <div className="mt-1 text-xs text-slate-500">{selectedCitation.chunk_id}</div>
+                  <p className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                    {selectedCitation.text}
+                  </p>
+                </div>
+              ) : (
+                <PanelEmpty label="Select a citation to inspect the retrieved text." />
+              )}
+            </div>
+          </section>
+
+          <section className="mt-7">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Database size={18} className="text-slate-600" aria-hidden="true" />
+                <h2 className="text-sm font-semibold">Knowledge Scope</h2>
+              </div>
+              <span className="text-xs text-slate-500">{documents.length} loaded</span>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-slate-500">
+              Sources this user can access. Retrieval still uses relevance ranking; this list is only a permission-scope reference.
+            </p>
+            <div
+              className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1"
+              onScroll={(event) => loadMoreOnScroll(event, () => loadDocumentsPage(false))}
+            >
+              {documentsLoading ? (
+                <PanelEmpty label="Loading source scope..." />
+              ) : documents.length ? (
+                documents.map((document) => <DocumentCard key={document.document_id} document={document} />)
+              ) : (
+                <PanelEmpty label="No accessible sources for this user." />
+              )}
+              {documentsLoadingMore && <PanelEmpty label="Loading more sources..." />}
+              {!documentsHasMore && documents.length > 0 && (
+                <div className="rounded border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">End of accessible source list.</div>
               )}
             </div>
           </section>
@@ -331,7 +546,7 @@ export function ChatShell() {
   );
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBubble({ message, onCitationSelect }: { message: ChatMessage; onCitationSelect: (chunkId: string) => void }) {
   const isUser = message.role === "user";
   const shouldAnimate = Boolean(message.animate && !isUser);
   const { displayedText, complete } = useTypewriter(message.content, shouldAnimate);
@@ -383,6 +598,21 @@ function MessageBubble({ message }: { message: ChatMessage }) {
                 <Metric label="Cache" value={`Semantic ${message.response.semantic_cache_score ?? ""}`} />
               )}
             </div>
+            {message.response.citations.length ? (
+              <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-200 pt-3">
+                {message.response.citations.map((citation) => (
+                  <button
+                    key={citation.chunk_id}
+                    type="button"
+                    onClick={() => onCitationSelect(citation.chunk_id)}
+                    className="inline-flex max-w-full items-center gap-2 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 hover:border-slate-400"
+                  >
+                    <FileText size={13} aria-hidden="true" />
+                    <span className="truncate">{citation.title}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="mt-3 flex items-center gap-2 border-t border-slate-200 pt-3 text-xs text-slate-500">
               <span>Feedback</span>
               <button

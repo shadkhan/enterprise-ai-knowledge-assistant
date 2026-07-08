@@ -40,7 +40,7 @@ The current project is a runnable MVP plus part of the persistent RAG foundation
 | Capability | Status | Notes |
 | --- | --- | --- |
 | Chat API | ✅ Done | Returns answer, citations, model, provider, latency, tokens, and cost |
-| Document ingestion | ✅ Done | Accepts text documents through `/ingest` |
+| Document ingestion | ✅ Done | Accepts text documents through `/ingest`, file uploads through `/ingest/files`, and folder batch scans through `/ingest/folder/jobs` |
 | Synthetic ingestion | ✅ Done | Generates synthetic `document`, `pdf`, `data`, `json`, and `text` content through `/synthetic/documents` |
 | Async ingestion jobs | ✅ Done | `POST /ingest/jobs`, `POST /synthetic/jobs`, and `GET /ingest/jobs/{job_id}` |
 | Hugging Face embeddings | ✅ Done | Optional local provider using `sentence-transformers/all-MiniLM-L6-v2` |
@@ -67,7 +67,7 @@ The current project is a runnable MVP plus part of the persistent RAG foundation
 | Embeddings | Hugging Face provider is optional; Docker defaults to mock unless embeddings group is installed | Phase 3 |
 | LLM | Mock and OpenAI-compatible paths work; real OpenAI provider is optional and env-driven | Phase 4 |
 | Streaming | UI animates text locally, but backend does not stream tokens yet | Phase 4 |
-| Ingestion | No real file upload, parsing, OCR, or connector sync yet | Phase 2 |
+| Ingestion | File upload and folder batch ingestion support text-like files; OCR and external connector sync are still planned | Phase 2 |
 | Security | Mock RBAC only; no SSO, ABAC, DLP, or enterprise audit trail yet | Phase 5 |
 | Evaluation | Golden regression checks exist, but groundedness scoring is still basic | Phase 6 |
 
@@ -85,6 +85,44 @@ Guardrails → Model Router → Permission-Aware Retrieval → LLM Provider
 Citations + Answer + Cost + Tokens + Latency
   ↓
 Persistence + Logs + Evaluation Hooks
+```
+
+```mermaid
+flowchart LR
+    User[Employee or Admin] --> Frontend[Next.js Chat + Admin Console]
+    Frontend --> Backend[FastAPI API]
+    Backend --> Auth[Mock RBAC]
+    Backend --> Guardrails[Guardrails]
+    Backend --> Retrieval[Hybrid Retrieval]
+    Retrieval --> Postgres[(PostgreSQL + pgvector)]
+    Retrieval --> Redis[(Redis Cache)]
+    Backend --> Router[Model Router]
+    Router --> Mock[Mock / OpenAI Mock]
+    Router --> OpenAI[OpenAI Responses API]
+    Router --> Compatible[OpenAI-compatible Models]
+    Backend --> History[(Conversation History)]
+    Backend --> Governance[Prompts, Evaluations, Feedback, Cost]
+```
+
+```mermaid
+sequenceDiagram
+    participant UI as Chat UI
+    participant API as FastAPI
+    participant R as Retrieval
+    participant L as LLM Provider
+    participant DB as Postgres/Redis
+
+    UI->>API: POST /chat
+    API->>API: Resolve user, guardrails, model route
+    API->>R: Search authorized chunks
+    R->>DB: Lexical/vector lookup
+    DB-->>R: Ranked sources
+    API->>L: Prompt + authorized context
+    L-->>API: Answer + token usage
+    API->>DB: Save cost and conversation messages
+    API-->>UI: Answer, citations, model, cost
+    UI->>API: GET /documents/chunks/{chunk_id}
+    API-->>UI: Source preview text
 ```
 
 ## 🛠️ Tech Stack
@@ -110,6 +148,23 @@ FastAPI, Pydantic, SQLAlchemy, SQLite, PostgreSQL, pgvector, Redis, LangChain, L
 | Vector-ready infra | pgvector |
 | Queue/cache-ready infra | Redis |
 | Containers | Docker Compose |
+
+## 📥 File Upload And Folder Batch Ingestion
+
+Admins can ingest real files from the Admin → Ingestion page.
+
+Supported now:
+
+| Source | Supported Types | Path |
+| --- | --- | --- |
+| Manual upload | `.txt`, `.md`, `.csv`, `.json` | `POST /ingest/files` |
+| Folder batch job | `.txt`, `.md`, `.csv`, `.json` | `POST /ingest/folder/jobs` |
+| Text job | Raw text | `POST /ingest/jobs` |
+| Synthetic job | Demo generated documents | `POST /synthetic/jobs` |
+
+Docker maps the host folder `data/ingest` to `/app/watch` in the backend and worker containers. Drop supported files into `data/ingest`, open `http://localhost:3001/admin/ingestion`, choose **Folder**, and submit the batch job. If archive mode is enabled, processed files move to the configured archive folder.
+
+PDF/DOCX parsing and OCR are intentionally left as the next parser expansion so the current path stays lightweight and deterministic.
 
 ## 🚀 Quick Start: Full Stack
 

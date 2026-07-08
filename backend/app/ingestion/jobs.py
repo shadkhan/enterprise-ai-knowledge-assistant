@@ -8,6 +8,8 @@ from redis.exceptions import RedisError, TimeoutError as RedisTimeoutError
 from app.core.config import settings
 from app.schemas.documents import (
     DocumentCreate,
+    FolderIngestionJobCreate,
+    FolderIngestionRequest,
     IngestionJobCreate,
     IngestionJobStatus,
     SyntheticContentRequest,
@@ -46,6 +48,13 @@ class IngestionJobQueue:
                 "synthetic": payload.synthetic.model_dump(),
                 "generate_embeddings": payload.generate_embeddings,
             },
+        )
+
+    def enqueue_folder(self, payload: FolderIngestionJobCreate, owner_id: str) -> IngestionJobStatus:
+        return self._enqueue(
+            job_type="folder",
+            owner_id=owner_id,
+            payload={"folder": payload.folder.model_dump()},
         )
 
     def dequeue(self, timeout_seconds: int = 5) -> dict | None:
@@ -141,6 +150,10 @@ def document_from_job(payload: dict) -> DocumentCreate:
 
 def synthetic_from_job(payload: dict) -> SyntheticContentRequest:
     return SyntheticContentRequest.model_validate(payload)
+
+
+def folder_from_job(payload: dict) -> FolderIngestionRequest:
+    return FolderIngestionRequest.model_validate(payload)
 
 
 ingestion_job_queue = IngestionJobQueue()

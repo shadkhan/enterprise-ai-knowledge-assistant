@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     reranker_candidate_multiplier: int = 4
     ingestion_queue_name: str = "ingestion_jobs"
     ingestion_job_ttl_seconds: int = 86400
+    ingestion_watch_folder: str = "./data/ingest"
+    ingestion_archive_folder: str | None = None
+    ingestion_allowed_extensions: list[str] = [".txt", ".md", ".csv", ".json"]
     retrieval_cache_ttl_seconds: int = 300
     semantic_cache_enabled: bool = True
     semantic_cache_ttl_seconds: int = 3600

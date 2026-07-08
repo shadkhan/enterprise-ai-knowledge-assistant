@@ -5,6 +5,7 @@ class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1)
     preferred_quality: str = Field(default="balanced", pattern="^(cheap|balanced|premium)$")
     top_k: int = Field(default=5, ge=1, le=10)
+    conversation_id: str | None = None
 
 
 class Citation(BaseModel):
@@ -15,6 +16,7 @@ class Citation(BaseModel):
 
 
 class ChatResponse(BaseModel):
+    conversation_id: str | None = None
     answer: str
     citations: list[Citation]
     model: str

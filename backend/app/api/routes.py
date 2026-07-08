@@ -1,7 +1,7 @@
 import time
 from typing import List
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
 
 from app.auth.rbac import MOCK_USERS, User, authorize_document, get_mock_user
 from app.cache import semantic_cache
@@ -11,10 +11,12 @@ from app.embeddings import get_embedding_provider
 from app.evaluation.service import evaluator
 from app.evaluation.golden_runner import golden_evaluation_runner
 from app.ingestion.jobs import ingestion_job_queue
+from app.ingestion.file_parsing import parse_uploaded_file
 from app.ingestion.service import ingestion_service
 from app.llm.factory import get_llm_provider
 from app.observability.logging import get_logger
 from app.repositories.costs import cost_repository
+from app.repositories.conversations import conversation_repository
 from app.repositories.documents import document_repository
 from app.repositories.evaluations import evaluation_repository
 from app.repositories.feedback import feedback_repository
@@ -31,8 +33,12 @@ from app.schemas.admin import (
     UserProfile,
 )
 from app.schemas.chat import ChatRequest, ChatResponse, Citation
+from app.schemas.conversations import CitationPreview, ConversationDetail, ConversationSummary
 from app.schemas.documents import (
     DocumentCreate,
+    FileIngestionSettings,
+    FolderIngestionJobCreate,
+    FolderIngestionRequest,
     DocumentSummary,
     IngestionJobCreate,
     IngestionJobStatus,
@@ -96,8 +102,15 @@ def admin_users(_: User = Depends(require_admin)) -> list[UserProfile]:
 
 
 @router.get("/admin/documents", response_model=list[AdminDocumentSummary])
-def admin_documents(_: User = Depends(require_admin)) -> list[AdminDocumentSummary]:
-    return [_to_admin_document(summary, chunk_count) for summary, chunk_count in document_repository.list_admin_documents()]
+def admin_documents(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    _: User = Depends(require_admin),
+) -> list[AdminDocumentSummary]:
+    return [
+        _to_admin_document(summary, chunk_count)
+        for summary, chunk_count in document_repository.list_admin_documents(limit=limit, offset=offset)
+    ]
 
 
 @router.get("/admin/documents/{document_id}", response_model=AdminDocumentDetail)
@@ -224,6 +237,15 @@ def admin_settings(_: User = Depends(require_admin)) -> AdminSettings:
     )
 
 
+@router.get("/admin/ingestion/settings", response_model=FileIngestionSettings)
+def admin_ingestion_settings(_: User = Depends(require_admin)) -> FileIngestionSettings:
+    return FileIngestionSettings(
+        watch_folder=settings.ingestion_watch_folder,
+        archive_folder=settings.ingestion_archive_folder,
+        allowed_extensions=settings.ingestion_allowed_extensions,
+    )
+
+
 @router.get("/admin/governance", response_model=GovernanceSummary)
 def admin_governance(_: User = Depends(require_admin)) -> GovernanceSummary:
     return GovernanceSummary(
@@ -338,6 +360,67 @@ def create_synthetic_ingestion_job(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+@router.post("/ingest/files", response_model=List[DocumentSummary])
+async def ingest_files(
+    files: list[UploadFile] = File(...),
+    department: str = Form(default="Global"),
+    classification: str = Form(default="internal"),
+    tags: str = Form(default=""),
+    generate_embeddings: bool = Form(default=True),
+    user: User = Depends(current_user),
+) -> List[DocumentSummary]:
+    if "admin" not in user.roles and "knowledge_manager" not in user.roles:
+        raise HTTPException(status_code=403, detail="File ingestion requires admin or knowledge_manager role")
+    if classification not in {"public", "internal", "restricted"}:
+        raise HTTPException(status_code=422, detail="classification must be public, internal, or restricted")
+
+    tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
+    summaries: list[DocumentSummary] = []
+    for upload in files:
+        content = await upload.read()
+        try:
+            parsed = parse_uploaded_file(
+                filename=upload.filename or "uploaded-file.txt",
+                content=content,
+                department=department,
+                classification=classification,
+                tags=tag_list,
+            )
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        summaries.extend(
+            ingestion_service.ingest(
+                parsed.document,
+                owner_id=user.user_id,
+                generate_embeddings=generate_embeddings,
+            )
+        )
+    return summaries
+
+
+@router.post("/ingest/folder", response_model=List[DocumentSummary])
+def ingest_folder_now(payload: FolderIngestionRequest, user: User = Depends(current_user)) -> List[DocumentSummary]:
+    if "admin" not in user.roles and "knowledge_manager" not in user.roles:
+        raise HTTPException(status_code=403, detail="Folder ingestion requires admin or knowledge_manager role")
+    try:
+        return ingestion_service.ingest_folder(payload, owner_id=user.user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/ingest/folder/jobs", response_model=IngestionJobStatus)
+def create_folder_ingestion_job(
+    payload: FolderIngestionJobCreate,
+    user: User = Depends(current_user),
+) -> IngestionJobStatus:
+    if "admin" not in user.roles and "knowledge_manager" not in user.roles:
+        raise HTTPException(status_code=403, detail="Folder ingestion jobs require admin or knowledge_manager role")
+    try:
+        return ingestion_job_queue.enqueue_folder(payload, owner_id=user.user_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
 @router.get("/ingest/jobs/{job_id}", response_model=IngestionJobStatus)
 def get_ingestion_job(job_id: str, user: User = Depends(current_user)) -> IngestionJobStatus:
     status = ingestion_job_queue.get_status(job_id)
@@ -349,9 +432,47 @@ def get_ingestion_job(job_id: str, user: User = Depends(current_user)) -> Ingest
 
 
 @router.get("/documents", response_model=List[DocumentSummary])
-def list_documents(user: User = Depends(current_user)) -> List[DocumentSummary]:
-    docs = ingestion_service.list_documents()
+def list_documents(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    user: User = Depends(current_user),
+) -> List[DocumentSummary]:
+    docs = ingestion_service.list_documents(limit=limit, offset=offset)
     return [doc for doc in docs if authorize_document(user, doc)]
+
+
+@router.get("/documents/chunks/{chunk_id}", response_model=CitationPreview)
+def get_document_chunk(chunk_id: str, user: User = Depends(current_user)) -> CitationPreview:
+    detail = document_repository.get_chunk(chunk_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Document chunk not found")
+    document, chunk = detail
+    if not authorize_document(user, document):
+        raise HTTPException(status_code=403, detail="Cannot view this citation source")
+    return CitationPreview(
+        document_id=document.document_id,
+        title=document.title,
+        chunk_id=chunk.chunk_id,
+        text=chunk.text,
+        metadata=document.metadata,
+    )
+
+
+@router.get("/chat/sessions", response_model=list[ConversationSummary])
+def list_chat_sessions(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    user: User = Depends(current_user),
+) -> list[ConversationSummary]:
+    return conversation_repository.list_for_user(user.user_id, limit=limit, offset=offset)
+
+
+@router.get("/chat/sessions/{conversation_id}", response_model=ConversationDetail)
+def get_chat_session(conversation_id: str, user: User = Depends(current_user)) -> ConversationDetail:
+    conversation = conversation_repository.get_for_user(conversation_id, user.user_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return conversation
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -394,7 +515,14 @@ def chat(payload: ChatRequest, user: User = Depends(current_user)) -> ChatRespon
                     "semantic_cache_score": cached_response.semantic_cache_score,
                 },
             )
-            return cached_response.model_copy(update={"latency_ms": latency_ms, "guardrail_flags": risk.flags})
+            response = cached_response.model_copy(update={"latency_ms": latency_ms, "guardrail_flags": risk.flags})
+            conversation_id = conversation_repository.save_exchange(
+                user_id=user.user_id,
+                question=sanitized_question,
+                response=response,
+                conversation_id=payload.conversation_id,
+            )
+            return response.model_copy(update={"conversation_id": conversation_id})
 
     provider = get_llm_provider(route.provider)
     llm_result = provider.generate_answer(
@@ -437,6 +565,7 @@ def chat(payload: ChatRequest, user: User = Depends(current_user)) -> ChatRespon
     )
 
     response = ChatResponse(
+        conversation_id=payload.conversation_id,
         answer=llm_result.answer,
         citations=citations,
         model=route.model,
@@ -460,7 +589,13 @@ def chat(payload: ChatRequest, user: User = Depends(current_user)) -> ChatRespon
             response=response,
             prompt_scope=prompt_scope,
         )
-    return response
+    conversation_id = conversation_repository.save_exchange(
+        user_id=user.user_id,
+        question=sanitized_question,
+        response=response,
+        conversation_id=payload.conversation_id,
+    )
+    return response.model_copy(update={"conversation_id": conversation_id})
 
 
 def _semantic_cache_embedding(query: str) -> list[float] | None:

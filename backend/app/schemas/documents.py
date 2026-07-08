@@ -42,6 +42,26 @@ class IngestionJobCreate(BaseModel):
     generate_embeddings: bool = True
 
 
+class FileIngestionSettings(BaseModel):
+    watch_folder: str
+    archive_folder: str | None = None
+    allowed_extensions: list[str] = Field(default_factory=list)
+
+
+class FolderIngestionRequest(BaseModel):
+    folder_path: str | None = None
+    department: str = Field(default="Global")
+    classification: str = Field(default="internal", pattern="^(public|internal|restricted)$")
+    tags: list[str] = Field(default_factory=list)
+    generate_embeddings: bool = True
+    archive_after_ingest: bool = False
+    max_files: int = Field(default=25, ge=1, le=200)
+
+
+class FolderIngestionJobCreate(BaseModel):
+    folder: FolderIngestionRequest
+
+
 class SyntheticIngestionJobCreate(BaseModel):
     synthetic: SyntheticContentRequest
     generate_embeddings: bool = True
