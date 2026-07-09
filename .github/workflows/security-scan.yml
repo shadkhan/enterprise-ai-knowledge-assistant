@@ -1,0 +1,71 @@
+name: Security Scan
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  dependency-scan:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run pip-audit
+        working-directory: backend
+        run: |
+          uv tool install pip-audit
+          uv tool run pip-audit -r requirements.txt || true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run pnpm audit
+        working-directory: frontend
+        run: |
+          corepack enable
+          pnpm audit --audit-level high || true
+
+  image-scan:
+    name: Container Image Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t eaka-backend:scan backend
+
+      - name: Build frontend image
+        run: docker build --build-arg NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 -t eaka-frontend:scan frontend
+
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: eaka-backend:scan
+          format: table
+          exit-code: "0"
+          severity: CRITICAL,HIGH
+
+      - name: Scan frontend image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: eaka-frontend:scan
+          format: table
+          exit-code: "0"
+          severity: CRITICAL,HIGH

@@ -330,20 +330,36 @@ Rollback should be:
 
 ## Workflow Files To Add Later
 
-Recommended GitHub Actions layout:
+The repository now includes a demo-ready GitHub Actions layout:
 
 ```text
 .github/workflows/
   ci.yml
-  terraform-gcp-plan.yml
-  terraform-aws-plan.yml
+  terraform-validate.yml
   deploy-gcp.yml
   deploy-aws.yml
-  nightly-evals.yml
   security-scan.yml
 ```
 
-Recommended reusable workflows:
+These workflows are safe by default:
+
+```text
+ci.yml                  -> runs tests, typecheck, frontend build, and Docker build smoke checks
+terraform-validate.yml  -> validates GCP and AWS Terraform without applying infrastructure
+security-scan.yml       -> demonstrates dependency and image scanning
+deploy-gcp.yml          -> manual workflow, defaults to dry-run
+deploy-aws.yml          -> manual workflow, defaults to dry-run
+```
+
+The deploy workflows only apply real infrastructure when manually triggered with:
+
+```text
+apply = true
+```
+
+They also require environment variables such as GCP project/workload identity settings or AWS role settings. Without those values, they remain useful as demo files and dry-run validation examples.
+
+Additional reusable workflows can be added later if the pipeline grows:
 
 ```text
 .github/workflows/reusable-backend-test.yml
@@ -371,6 +387,77 @@ Start with:
    - Golden evals.
 
 Then add AWS and deeper security/eval tools.
+
+## Demo-Only CI/CD Mode
+
+The repository includes CI/CD files that can be reviewed and run without deploying to real cloud infrastructure.
+
+Demo-safe workflows:
+
+```text
+.github/workflows/ci.yml
+.github/workflows/terraform-validate.yml
+.github/workflows/security-scan.yml
+```
+
+Manual dry-run workflows:
+
+```text
+.github/workflows/deploy-gcp.yml
+.github/workflows/deploy-aws.yml
+```
+
+The deploy workflows default to:
+
+```text
+apply = false
+```
+
+In dry-run mode, they:
+
+- check Terraform formatting and validation
+- build backend and frontend Docker images locally inside the runner
+- skip cloud authentication
+- skip registry push
+- skip Terraform apply
+
+This lets reviewers see the complete CI/CD shape without needing GCP or AWS access.
+
+To enable real GCP deploys, add GitHub environment variables:
+
+```text
+GCP_PROJECT_ID
+GCP_REGION
+GCP_ARTIFACT_REPOSITORY
+GCP_WORKLOAD_IDENTITY_PROVIDER
+GCP_DEPLOY_SERVICE_ACCOUNT
+```
+
+Then run `Deploy GCP` manually with:
+
+```text
+apply = true
+```
+
+To enable real AWS deploys, add GitHub environment variables:
+
+```text
+AWS_REGION
+AWS_ROLE_TO_ASSUME
+```
+
+Then run `Deploy AWS` manually with:
+
+```text
+apply = true
+```
+
+Helper scripts for post-deploy validation are available in:
+
+```text
+scripts/ci/smoke-test.ps1
+scripts/ci/run-admin-evals.ps1
+```
 
 ## References
 

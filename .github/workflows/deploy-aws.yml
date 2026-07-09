@@ -1,0 +1,106 @@
+name: Deploy AWS
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "GitHub environment to deploy"
+        required: true
+        default: "dev"
+        type: choice
+        options: ["dev", "stage", "prod"]
+      image_tag:
+        description: "Image tag to build and deploy"
+        required: true
+        default: "demo"
+      apply:
+        description: "Apply Terraform changes. Leave false for demo/dry-run."
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: AWS Dry Run Or Deploy
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      TERRAFORM_DIR: deploy/aws/terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Explain demo mode
+        if: ${{ !inputs.apply }}
+        run: |
+          echo "Dry-run mode. This workflow validates files and builds images locally."
+          echo "Set apply=true and configure AWS_ROLE_TO_ASSUME to deploy."
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Terraform fmt and validate
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false
+          terraform validate
+
+      - name: Build backend image locally
+        run: docker build --build-arg INSTALL_LLM=true --build-arg INSTALL_AWS=true -t eaka-backend:${{ inputs.image_tag }} backend
+
+      - name: Build frontend image locally
+        run: docker build --build-arg NEXT_PUBLIC_API_BASE_URL="" -t eaka-frontend:${{ inputs.image_tag }} frontend
+
+      - name: Configure AWS credentials
+        if: ${{ inputs.apply }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform init with configured backend
+        if: ${{ inputs.apply }}
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform init -reconfigure
+
+      - name: Bootstrap ECR repositories
+        if: ${{ inputs.apply }}
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: |
+          terraform apply -auto-approve \
+            -var-file="terraform.tfvars" \
+            -target aws_ecr_repository.backend \
+            -target aws_ecr_repository.frontend
+
+      - name: Login to ECR
+        if: ${{ inputs.apply }}
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Tag and push images
+        if: ${{ inputs.apply }}
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: |
+          BACKEND_REPO="$(terraform output -raw backend_ecr_repository_url)"
+          FRONTEND_REPO="$(terraform output -raw frontend_ecr_repository_url)"
+          docker tag eaka-backend:${{ inputs.image_tag }} "$BACKEND_REPO:${{ inputs.image_tag }}"
+          docker tag eaka-frontend:${{ inputs.image_tag }} "$FRONTEND_REPO:${{ inputs.image_tag }}"
+          docker push "$BACKEND_REPO:${{ inputs.image_tag }}"
+          docker push "$FRONTEND_REPO:${{ inputs.image_tag }}"
+
+      - name: Terraform plan
+        if: ${{ inputs.apply }}
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform plan -var-file="terraform.tfvars" -out=tfplan
+
+      - name: Terraform apply
+        if: ${{ inputs.apply }}
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform apply -auto-approve tfplan

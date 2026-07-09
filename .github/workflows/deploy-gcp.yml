@@ -1,0 +1,110 @@
+name: Deploy GCP
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "GitHub environment to deploy"
+        required: true
+        default: "dev"
+        type: choice
+        options: ["dev", "stage", "prod"]
+      image_tag:
+        description: "Image tag to build and deploy"
+        required: true
+        default: "demo"
+      apply:
+        description: "Apply Terraform changes. Leave false for demo/dry-run."
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: GCP Dry Run Or Deploy
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+      REPOSITORY: ${{ vars.GCP_ARTIFACT_REPOSITORY || 'eaka' }}
+      TERRAFORM_DIR: deploy/gcp/terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Explain demo mode
+        if: ${{ !inputs.apply }}
+        run: |
+          echo "Dry-run mode. This workflow validates files and builds images locally."
+          echo "Set apply=true and configure GCP_PROJECT_ID plus Workload Identity variables to deploy."
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Terraform fmt and validate
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false
+          terraform validate
+
+      - name: Build backend image locally
+        run: docker build --build-arg INSTALL_LLM=true --build-arg INSTALL_GCP=true -t eaka-backend:${{ inputs.image_tag }} backend
+
+      - name: Build frontend image locally
+        run: docker build --build-arg NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 -t eaka-frontend:${{ inputs.image_tag }} frontend
+
+      - name: Authenticate to Google Cloud
+        if: ${{ inputs.apply }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        if: ${{ inputs.apply }}
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Terraform init with configured backend
+        if: ${{ inputs.apply }}
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform init -reconfigure
+
+      - name: Bootstrap Artifact Registry
+        if: ${{ inputs.apply }}
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: |
+          terraform apply -auto-approve \
+            -var-file="terraform.tfvars" \
+            -target google_project_service.apis \
+            -target google_artifact_registry_repository.app
+
+      - name: Configure Docker for Artifact Registry
+        if: ${{ inputs.apply }}
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - name: Tag and push images
+        if: ${{ inputs.apply }}
+        run: |
+          BACKEND_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/backend:${{ inputs.image_tag }}"
+          FRONTEND_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/frontend:${{ inputs.image_tag }}"
+          docker tag eaka-backend:${{ inputs.image_tag }} "$BACKEND_IMAGE"
+          docker tag eaka-frontend:${{ inputs.image_tag }} "$FRONTEND_IMAGE"
+          docker push "$BACKEND_IMAGE"
+          docker push "$FRONTEND_IMAGE"
+
+      - name: Terraform plan
+        if: ${{ inputs.apply }}
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform plan -var-file="terraform.tfvars" -out=tfplan
+
+      - name: Terraform apply
+        if: ${{ inputs.apply }}
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform apply -auto-approve tfplan
