@@ -410,3 +410,138 @@ flowchart TB
     Auth -. gates every step .-> Orchestration
     Guardrails -. validates input/output .-> Orchestration
 ```
+
+## 8. Multi-cloud deployment
+
+Draw the same app container set going to both GCP and AWS. The key point is that application code stays mostly cloud-neutral; deployment configuration selects managed services.
+
+```mermaid
+flowchart LR
+    classDef app fill:#eef2ff,stroke:#4f46e5,stroke-width:1px,color:#111827
+    classDef gcp fill:#ecfeff,stroke:#0891b2,stroke-width:1px,color:#111827
+    classDef aws fill:#fff7ed,stroke:#f97316,stroke-width:1px,color:#111827
+    classDef config fill:#f8fafc,stroke:#64748b,stroke-width:1px,color:#111827
+
+    subgraph App["Cloud-neutral application"]
+        Frontend["Next.js frontend image"]:::app
+        Backend["FastAPI backend image"]:::app
+        Worker["Ingestion worker image"]:::app
+        Config["Environment profiles<br/>local / gcp / aws"]:::config
+        StorageAdapter["Storage adapter<br/>local / GCS / S3"]:::config
+        LLMAdapter["LLM adapter<br/>mock / OpenAI / Vertex / Bedrock"]:::config
+    end
+
+    subgraph GCP["GCP deployment"]
+        CloudRun["Cloud Run<br/>frontend, backend, worker"]:::gcp
+        CloudSQL["Cloud SQL PostgreSQL<br/>pgvector"]:::gcp
+        Memorystore["Memorystore Redis"]:::gcp
+        GCS["Cloud Storage bucket"]:::gcp
+        ArtifactRegistry["Artifact Registry"]:::gcp
+        Vertex["Vertex AI / Gemini"]:::gcp
+    end
+
+    subgraph AWS["AWS deployment"]
+        ECS["ECS Fargate<br/>frontend, backend, worker"]:::aws
+        RDS["RDS PostgreSQL<br/>pgvector"]:::aws
+        ElastiCache["ElastiCache Redis"]:::aws
+        S3["S3 bucket"]:::aws
+        ECR["ECR"]:::aws
+        Bedrock["Amazon Bedrock"]:::aws
+    end
+
+    Config --> Frontend
+    Config --> Backend
+    Config --> Worker
+    Backend --> StorageAdapter
+    Backend --> LLMAdapter
+
+    Frontend --> CloudRun
+    Backend --> CloudRun
+    Worker --> CloudRun
+    CloudRun --> CloudSQL
+    CloudRun --> Memorystore
+    StorageAdapter --> GCS
+    LLMAdapter --> Vertex
+    ArtifactRegistry --> CloudRun
+
+    Frontend --> ECS
+    Backend --> ECS
+    Worker --> ECS
+    ECS --> RDS
+    ECS --> ElastiCache
+    StorageAdapter --> S3
+    LLMAdapter --> Bedrock
+    ECR --> ECS
+```
+
+## 9. CI/CD quality gates
+
+Use this diagram to explain that deployment is not just image push and Terraform apply. Every stage has a gate.
+
+```mermaid
+flowchart LR
+    classDef source fill:#ffffff,stroke:#334155,stroke-width:1px,color:#111827
+    classDef test fill:#ecfdf5,stroke:#059669,stroke-width:1px,color:#111827
+    classDef security fill:#fef2f2,stroke:#dc2626,stroke-width:1px,color:#111827
+    classDef deploy fill:#eef2ff,stroke:#4f46e5,stroke-width:1px,color:#111827
+    classDef approve fill:#fff7ed,stroke:#f97316,stroke-width:1px,color:#111827
+
+    PR["Pull request"]:::source
+    BackendTests["Backend tests<br/>pytest"]:::test
+    FrontendChecks["Frontend checks<br/>tsc + build"]:::test
+    EvalSmoke["Golden eval smoke<br/>retrieval + citations"]:::test
+    DockerBuild["Docker build smoke"]:::test
+    Security["Security scan<br/>Trivy + audits"]:::security
+    Terraform["Terraform fmt<br/>validate<br/>plan"]:::deploy
+    Policy["Policy checks<br/>OPA / Conftest later"]:::security
+    Merge["Merge to main"]:::source
+    Images["Build immutable images<br/>Git SHA tags"]:::deploy
+    Registry["Push to registry<br/>Artifact Registry / ECR"]:::deploy
+    Approval["Stage/prod approval"]:::approve
+    Apply["Terraform apply"]:::deploy
+    Smoke["Post-deploy smoke<br/>/health + /ready"]:::test
+    Evals["Post-deploy golden evals"]:::test
+
+    PR --> BackendTests --> FrontendChecks --> EvalSmoke --> DockerBuild --> Security --> Terraform --> Policy --> Merge
+    Merge --> Images --> Registry --> Approval --> Apply --> Smoke --> Evals
+```
+
+## 10. Demo CI/CD mode
+
+Use this when explaining why CI/CD files exist even without active cloud credentials. The workflows are runnable as demos, and real deployment is enabled by adding a small amount of configuration.
+
+```mermaid
+flowchart TB
+    classDef safe fill:#ecfdf5,stroke:#059669,stroke-width:1px,color:#111827
+    classDef manual fill:#fff7ed,stroke:#f97316,stroke-width:1px,color:#111827
+    classDef cloud fill:#eef2ff,stroke:#4f46e5,stroke-width:1px,color:#111827
+    classDef stop fill:#fef2f2,stroke:#dc2626,stroke-width:1px,color:#111827
+
+    Trigger["GitHub Actions workflow"]:::manual
+
+    subgraph AlwaysSafe["Runs without cloud accounts"]
+        CI["ci.yml<br/>tests + build"]:::safe
+        TFValidate["terraform-validate.yml<br/>fmt + validate"]:::safe
+        SecScan["security-scan.yml<br/>audit + Trivy"]:::safe
+    end
+
+    subgraph DeployWorkflow["Manual deploy workflow"]
+        Input["workflow_dispatch<br/>apply flag"]:::manual
+        DryRun["apply=false<br/>validate Terraform<br/>build images locally"]:::safe
+        ApplyTrue["apply=true"]:::manual
+        MissingConfig["missing cloud vars<br/>stop safely"]:::stop
+        CloudAuth["OIDC cloud auth<br/>GCP or AWS"]:::cloud
+        RegistryPush["push images<br/>Artifact Registry or ECR"]:::cloud
+        TerraformApply["terraform apply"]:::cloud
+        Smoke["smoke + eval checks"]:::safe
+    end
+
+    Trigger --> CI
+    Trigger --> TFValidate
+    Trigger --> SecScan
+    Trigger --> Input
+    Input --> DryRun
+    Input --> ApplyTrue
+    ApplyTrue --> MissingConfig
+    ApplyTrue --> CloudAuth --> RegistryPush --> TerraformApply --> Smoke
+```

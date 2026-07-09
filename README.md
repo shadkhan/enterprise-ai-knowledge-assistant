@@ -32,6 +32,9 @@ The current project is a runnable MVP plus part of the persistent RAG foundation
 | Prompt governance | Versioned prompt library for system, retrieval, evaluation, summarization, and guardrail prompts |
 | UI | Next.js chat UI plus admin pages for metrics, prompts, users, authentication, settings, and governance |
 | Observability | Structured logs plus persisted cost, evaluation, feedback, and prompt-version trace records |
+| Cloud compatibility | Environment-driven local/GCP/AWS configuration with local, GCS, and S3 storage provider adapters |
+| Deployment | GCP Terraform for Cloud Run/Cloud SQL/Memorystore/GCS and AWS Terraform for ECS/RDS/ElastiCache/S3 |
+| CI/CD | Demo-ready GitHub Actions for CI, Terraform validation, security scan, and dry-run/manual deployments |
 | Package Managers | `uv` for Python, `pnpm` for Node/Next.js |
 | Infra | Docker Compose with backend, frontend, PostgreSQL + pgvector, and Redis |
 
@@ -58,6 +61,11 @@ The current project is a runnable MVP plus part of the persistent RAG foundation
 | Admin console | ✅ Done | Metrics, prompts, users, authentication, settings, and governance pages |
 | Chat UI | ✅ Done | Professional chat workspace with response animation |
 | Local CORS | ✅ Done | Allows local frontend ports such as `3000`, `3001`, etc. |
+| Readiness endpoint | ✅ Done | `/ready` checks database and Redis for deployment health checks |
+| Cloud storage abstraction | ✅ Done | Local file storage works now; GCS and S3 adapters are wired for cloud deployments |
+| GCP deployment scaffold | ✅ Done | Terraform and scripts under `deploy/gcp` |
+| AWS deployment scaffold | ✅ Done | Terraform and scripts under `deploy/aws` |
+| Demo CI/CD workflows | ✅ Done | GitHub Actions under `.github/workflows`, deploy workflows are dry-run by default |
 
 ## 🚧 Not Production-Ready Yet
 
@@ -148,6 +156,8 @@ FastAPI, Pydantic, SQLAlchemy, SQLite, PostgreSQL, pgvector, Redis, LangChain, L
 | Vector-ready infra | pgvector |
 | Queue/cache-ready infra | Redis |
 | Containers | Docker Compose |
+| Cloud IaC | Terraform for GCP and AWS |
+| CI/CD | GitHub Actions, Terraform validate, Trivy, dependency audit, dry-run deploy workflows |
 
 ## 📥 File Upload And Folder Batch Ingestion
 
@@ -206,6 +216,39 @@ Docker Desktop names are project-specific:
 | Volumes | `eaka-postgres-data`, `eaka-redis-data`, `eaka-frontend-node-modules` |
 
 The backend allows local frontend origins on any port, so `localhost:3000`, `localhost:3001`, and similar local dev ports can call the API.
+
+## Deployment And CI/CD
+
+The project includes deployment scaffolding for local, GCP, and AWS targets.
+
+| Target | Location | Runtime Shape |
+| --- | --- | --- |
+| Local | `infra/docker-compose.yml` | Backend, worker, frontend, PostgreSQL/pgvector, Redis |
+| GCP | `deploy/gcp` | Cloud Run frontend/backend/worker, Cloud SQL, Memorystore, GCS, Artifact Registry |
+| AWS | `deploy/aws` | ECS Fargate frontend/backend/worker, RDS PostgreSQL, ElastiCache, S3, ECR, ALB |
+
+Environment profiles:
+
+| Profile | File |
+| --- | --- |
+| Local backend | `backend/.env.local.example` |
+| GCP backend | `backend/.env.gcp.example` |
+| AWS backend | `backend/.env.aws.example` |
+| Local frontend | `frontend/.env.local.example` |
+| GCP frontend | `frontend/.env.gcp.example` |
+| AWS frontend | `frontend/.env.aws.example` |
+
+CI/CD is demo-ready and safe by default:
+
+| Workflow | Purpose | Cloud Required |
+| --- | --- | --- |
+| `.github/workflows/ci.yml` | Backend tests, frontend typecheck/build, Docker build smoke | No |
+| `.github/workflows/terraform-validate.yml` | Terraform fmt/init/validate for GCP and AWS | No |
+| `.github/workflows/security-scan.yml` | Dependency and container scan examples | No |
+| `.github/workflows/deploy-gcp.yml` | Manual GCP deploy workflow, dry-run by default | Only when `apply=true` |
+| `.github/workflows/deploy-aws.yml` | Manual AWS deploy workflow, dry-run by default | Only when `apply=true` |
+
+The deploy workflows default to `apply=false`, so they can be reviewed or run as demo pipelines without creating cloud resources. To enable real deployment, configure GitHub environment variables and run the workflow manually with `apply=true`.
 
 ## ⚙️ Backend Only
 
@@ -620,7 +663,10 @@ Important constraint: agents must reuse shared auth, retrieval, logging, cost, a
 | Frontend type check | `cd frontend && pnpm exec tsc --noEmit` | TypeScript passes |
 | Frontend production build | `cd frontend && pnpm build` | Next.js build succeeds |
 | Backend health | `curl http://localhost:8000/health` | Returns `{"status":"ok",...}` |
+| Backend readiness | `curl http://localhost:8000/ready` | Returns database and Redis readiness |
 | Docker full stack | `cd infra && docker compose up --build` | Project-specific `eaka-*` containers start |
+| CI helper smoke test | `.\scripts\ci\smoke-test.ps1 -BaseUrl http://localhost:8000` | Health, readiness, and chat checks pass |
+| CI helper eval test | `.\scripts\ci\run-admin-evals.ps1 -BaseUrl http://localhost:8000` | Golden evaluations pass |
 
 ## 📝 Current Mock Limitations
 
@@ -642,6 +688,14 @@ Important constraint: agents must reuse shared auth, retrieval, logging, cost, a
 | `docs/architecture.md` | System design and component responsibilities |
 | `docs/user-guide.md` | Step-by-step run, test, demo, and troubleshooting guide |
 | `docs/interview-explanation.md` | Interview-friendly explanation and follow-up answers |
+| `docs/cloud-architecture.md` | GCP/AWS deployment architecture and AI platform reasoning |
+| `docs/cloud-cost-comparison.md` | Ongoing GCP vs AWS cost comparison |
+| `docs/cheapest-mid-size-enterprise-deployment.md` | Cheapest practical enterprise deployment option |
+| `docs/deployment-compatibility-strategy.md` | How local, GCP, and AWS modes are selected |
+| `docs/ci-cd-plan.md` | CI/CD gates, tools, evals, security, and promotion strategy |
 | `docs/roadmap.md` | Short roadmap summary |
 | `docs/tradeoffs.md` | Design tradeoffs |
-| `docs/whiteboard.md` | Whiteboard-style architecture notes |
+| `docs/whiteboard.md` | Whiteboard-style architecture, deployment, and CI/CD diagrams |
+| `deploy/gcp/README.md` | GCP Terraform deployment guide |
+| `deploy/aws/README.md` | AWS Terraform deployment guide |
+| `.github/README.md` | Demo-ready GitHub Actions CI/CD guide |
