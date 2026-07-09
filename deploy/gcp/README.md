@@ -1,8 +1,10 @@
 # GCP Terraform Deployment
 
-This folder contains the starter GCP Terraform deployment for the Enterprise AI Knowledge Assistant.
+This folder contains the GCP deployment scaffold for the Enterprise AI Knowledge Assistant.
 
-It provisions:
+It is designed for both local operator deployment and later CI/CD automation.
+
+## What It Provisions
 
 - Artifact Registry repository for application images.
 - Cloud Run services for frontend, backend API, and worker.
@@ -16,9 +18,18 @@ It provisions:
 
 - Terraform installed.
 - Google Cloud CLI installed.
-- Authenticated with `gcloud auth application-default login`.
+- Docker installed.
+- Authenticated locally with:
+
+```powershell
+gcloud auth login
+gcloud auth application-default login
+```
+
 - A GCP project with billing enabled.
-- Permission to create Cloud Run, Cloud SQL, Memorystore, Artifact Registry, IAM, VPC, and Storage resources.
+- Permissions to create Cloud Run, Cloud SQL, Memorystore, Artifact Registry, IAM, VPC, Storage, and enabled APIs.
+
+For CI/CD, prefer GitHub Actions OIDC with GCP Workload Identity Federation instead of long-lived service account keys.
 
 ## Layout
 
@@ -41,7 +52,21 @@ deploy/gcp/
     backend.tf.example
 ```
 
-## Quick Start
+## Deployment Flow
+
+The deployment has two passes because Cloud Run needs container images, but container images need Artifact Registry to exist first.
+
+```text
+1. terraform init
+2. bootstrap Artifact Registry
+3. build and push backend/frontend images
+4. terraform plan
+5. terraform apply
+6. smoke test /health and /ready
+7. run golden evaluations
+```
+
+## Local Operator Quick Start
 
 Copy the example variables file:
 
@@ -55,7 +80,7 @@ Edit:
 deploy/gcp/terraform/terraform.tfvars
 ```
 
-Then run:
+Run the deployment:
 
 ```powershell
 .\deploy\gcp\scripts\terraform-init.ps1
@@ -66,8 +91,6 @@ Then run:
 ```
 
 ## Image Build Flow
-
-Before applying Cloud Run services, push container images to Artifact Registry.
 
 After the Artifact Registry repository exists, run:
 
@@ -87,6 +110,100 @@ frontend_image = "us-central1-docker.pkg.dev/your-project-id/eaka/frontend:dev"
 worker_image   = "us-central1-docker.pkg.dev/your-project-id/eaka/backend:dev"
 ```
 
+For production, use immutable tags such as the Git SHA:
+
+```text
+backend:9f3a21c
+frontend:9f3a21c
+```
+
+## Environment Variables
+
+Terraform injects the core GCP runtime settings into Cloud Run:
+
+| Variable | Purpose |
+| --- | --- |
+| `ENVIRONMENT` | `dev`, `stage`, or `prod`. |
+| `DEPLOYMENT_TARGET` | Set to `gcp`. |
+| `DATABASE_URL` | Cloud SQL connection string using Unix socket. |
+| `REDIS_URL` | Memorystore Redis endpoint. |
+| `OBJECT_STORAGE_PROVIDER` | Set to `gcs`. |
+| `OBJECT_STORAGE_BUCKET` | GCS bucket for documents. |
+| `DEFAULT_LLM_PROVIDER` | `mock` initially, later `vertex`. |
+| `DEFAULT_EMBEDDING_PROVIDER` | `mock` initially, later `vertex`. |
+| `OBSERVABILITY_PROVIDER` | Set to `gcp`. |
+
+The example cloud profile is also documented in:
+
+```text
+backend/.env.gcp.example
+```
+
+## CI/CD Deployment Practice
+
+For CI/CD, use these stages:
+
+### Pull Request
+
+- Backend tests with `pytest`.
+- Frontend typecheck and build.
+- Golden evaluation smoke test.
+- Docker build check.
+- Terraform `fmt` and `validate`.
+- Terraform plan for changed environment.
+- Security scans with Trivy and dependency audit tools.
+
+### Merge To Main
+
+- Build backend and frontend images.
+- Push images to Artifact Registry with Git SHA tags.
+- Run Terraform plan.
+- Require approval for `stage` and `prod`.
+- Apply Terraform.
+- Smoke test:
+
+```text
+GET /health
+GET /ready
+```
+
+- Run golden evaluations through the admin evaluation endpoint.
+
+### Production
+
+- Use protected GitHub environments.
+- Require manual approval.
+- Block deploys on critical vulnerabilities.
+- Block deploys on failing golden evaluations.
+- Require Terraform plan review.
+- Keep rollback image tags.
+
+## Terraform State
+
+For local experimentation, local Terraform state is acceptable.
+
+For shared environments, use the GCS backend:
+
+```text
+deploy/gcp/terraform/backend.tf.example
+```
+
+Copy it:
+
+```powershell
+Copy-Item deploy/gcp/terraform/backend.tf.example deploy/gcp/terraform/backend.tf
+```
+
+Then edit the bucket and prefix.
+
+Recommended state layout:
+
+```text
+enterprise-ai-knowledge-assistant/gcp/dev
+enterprise-ai-knowledge-assistant/gcp/stage
+enterprise-ai-knowledge-assistant/gcp/prod
+```
+
 ## Important Notes
 
 The current Terraform passes `DATABASE_URL` directly into Cloud Run. That is acceptable for a starter deployment, but the password can appear in Terraform state. For stricter enterprise deployment, move the full `DATABASE_URL` into Secret Manager and reference it from Cloud Run.
@@ -97,7 +214,43 @@ The Terraform enables the main APIs using `google_project_service`, but first-ti
 
 Cloud Run uses a Cloud SQL Unix socket mount for PostgreSQL and a Serverless VPC Access connector for Memorystore Redis.
 
-References:
+The worker is deployed as a Cloud Run service with configurable min instances. If ingestion must process Redis jobs continuously, set:
+
+```hcl
+worker_min_instances = 1
+```
+
+For cheaper dev environments, keep:
+
+```hcl
+worker_min_instances = 0
+```
+
+## Post-Deploy Checks
+
+After apply, use Terraform outputs:
+
+```powershell
+cd deploy/gcp/terraform
+terraform output backend_url
+terraform output frontend_url
+```
+
+Then test:
+
+```powershell
+$backend = terraform output -raw backend_url
+Invoke-RestMethod "$backend/health"
+Invoke-RestMethod "$backend/ready"
+```
+
+Then run admin evaluations from the UI or API:
+
+```text
+POST /admin/evaluations/run
+```
+
+## References
 
 - Cloud Run v2 Terraform resource: https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/cloud_run_v2_service
 - Cloud SQL Terraform resource: https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/sql_database_instance
