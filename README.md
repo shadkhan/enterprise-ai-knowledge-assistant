@@ -1,3 +1,4 @@
+Not for production environment - Developing it for Tutorial and Training purpose. It is in Progress
 # 🧠 Enterprise AI Knowledge Assistant
 
 > Secure, citation-first enterprise RAG assistant with permission-aware retrieval, cost telemetry, evaluation hooks, and a modern Next.js chat experience.
